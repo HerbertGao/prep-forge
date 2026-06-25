@@ -1,0 +1,134 @@
+schema: spec-driven
+
+# 创建 OpenSpec 工件时展示给 AI agent 的项目级上下文。
+context: |
+  项目名称：prep-forge
+
+  prep-forge 是一个 Web 优先的商业化 AI 学习产品，基于现有
+  ai-teacher 工作流。它是面向考试的学习引擎，不是通用聊天机器人，
+  也不是通用 LMS。
+
+  产品闭环：
+    考试计划 -> 考纲 -> 知识点 -> 题库 -> 课包 -> AI 课堂
+    -> 批改 -> 错题 -> 间隔复习 -> 进度更新 -> 计划重排
+
+  初始产品目标：
+    面向成人和自学考试用户，从 GitHub `HerbertGao/ai-teacher` 已有
+    2026 年 10 月自考备考数据开始。首版真实初始化数据包括高等数学工本
+    00023、离散数学 02324、操作系统 13180、计算机系统原理 13015，
+    以及已通过的政治类历史课程。高数学科需要尽早支持，因为它会迫使
+    系统正确处理 LaTeX 渲染、例题、分步推理、批改和 Web UI 行为。
+
+  技术方向：
+    - TypeScript 负责产品运行时：Next.js App Router、React UI、
+      学生课堂、仪表盘、管理后台、产品 API/BFF、实时 AI streaming、
+      课包渲染和课堂状态机。
+    - Python 负责 AI、数据和离线任务：FastAPI worker 端点、RAG 摄取、
+      PDF/DOCX/OCR 处理、embedding 任务、数学资源生成、agent 工作流、
+      质量门禁，以及批量批改或分析。
+    - PostgreSQL 是规范事实来源。MVP 阶段可以使用 pgvector 做检索。
+      Redis、Temporal、登录和计费只有在当前阶段确实需要时才引入。
+
+  领域规则：
+    - Markdown/YAML 是 `ai-teacher` 的 legacy 导入源，不是商业版长期
+      业务存储。Phase 0A 必须建立只读导入、来源追踪、staging、
+      quarantine 和导入报告。
+    - Legacy import 不反写 `ai-teacher`，不做双向同步，不用 LLM 自动
+      修复历史 Markdown。
+    - 每条导入数据需要尽量保留 source repo/ref、source path、
+      heading path、line range、raw block、content hash 和 import run。
+    - 公共内容库和个人学习状态必须分开建模。题库、知识点、考纲属于
+      公共内容；learner_profile、progress、mistakes、review_queue、
+      daily_log、study_plan 属于个人学习状态。
+    - 结构化学习者状态属于 PostgreSQL；RAG 支持解释和证据检索，但不能
+      替代规范领域数据。
+    - 进度记录采用事件优先。课堂动作产出 session events；代码从事件
+      派生进度、错题、复习队列和仪表盘。
+    - LLM 可以产出结构化事件或批改建议，但学习进度由确定性应用代码修改。
+    - 知识点状态从 unseen -> taught -> practiced -> mastered 开始。
+    - 漏学日期应触发计划重排，而不是自动堆积成心理债务。
+    - 课包是结构化教学程序，不是普通 Markdown。进入 ready 状态前，
+      必须通过 schema 校验、数学渲染、题目引用和质量门禁。
+    - AI 生成的教育内容必须有检查、校验和 quarantine 路径。
+    - 每次真实模型调用都必须记录 provider、model、task type、token
+      用量、预估成本、延迟、状态和错误信息。
+
+  Agent 边界：
+    - Planner Agent 选择学习时段并重排计划。
+    - Prep Agent 异步创建课包草稿。
+    - Tutor Agent 留在 ready 课包范围内授课并产出事件。
+    - Grader Agent 批改非平凡答案并提取错误类别。
+    - Coach Agent 支持节奏管理和过载检测。
+    - QA Agent 校验课程质量、数学渲染、知识点对齐和题目引用。
+
+  第一实现阶段：
+    除非变更明确说明，否则先做 Phase 0A 和 Phase 0 的最小闭环。
+    Phase 0A 建立 `ai-teacher` 只读导入契约、source refs、staging、
+    quarantine、导入报告和真实 seed 数据。Phase 0 创建类型明确的
+    monorepo 骨架、共享 schemas、真实 seed dashboard、学科/知识点视图、
+    课包查看器、MathBlock fallback、课堂骨架和 local session events。
+    Phase 0A/0 不添加 auth、Stripe、真实 LLM 调用、RAG、双向同步、
+    GitHub webhook 或复杂微服务。
+
+  来自 HerbertGao GitHub 项目的文档风格参考：
+    - gaokao_bot 和 gaokao_bot_mini_app：简洁的项目介绍、功能列表、
+      技术栈、项目结构、开发指南和集成说明。
+    - libpku、REKCARC-TSC-UHT、go-fundamental-programming：学习资料
+      导向、清晰组织、贡献期望、参考资料和实用入口。
+    可以借鉴这些 README 的清晰度，但本项目以 PRODUCT.md 的产品和工程
+    约束为准。
+
+  权威文件：
+    - PRODUCT.md 是产品和工程事实来源。
+    - openspec/config.yaml 是面向 agent 的紧凑项目上下文。
+    - README.md 是面向人类读者的仓库入口。
+    - CLAUDE.md 是 Claude Code 入口，可指向本文件。
+
+rules:
+  proposal:
+    - 提案前先阅读 PRODUCT.md 和本配置。
+    - 说明用户可见的学习结果，以及运营或 admin 结果。
+    - 明确非目标，尤其是请求可能滑向通用聊天机器人、完整 LMS、移动 App、计费系统或微服务重写时。
+    - 让提案足够窄，可以在一个阶段内实现和 review。
+    - 识别受影响的领域对象、schemas 和状态迁移。
+    - 如果涉及 `ai-teacher` 数据，说明导入来源、幂等策略、source refs、staging/quarantine 和人工确认路径。
+    - 标出任何新的 AI 行为、模型调用日志、校验和 quarantine 要求。
+
+  design:
+    - 优先朴素、类型明确、可观测的架构，不追逐 agentic magic。
+    - TypeScript 和 Python 之间通过显式 schemas 或 API 连接。
+    - 不让 RAG 拥有规范学习状态。
+    - 不让 legacy Markdown 拥有规范学习状态；导入后以 PostgreSQL 结构化对象为准。
+    - 导入优先保证可追溯、可重复、可人工修正，再追求完整解析。
+    - 将课包、题目、知识点状态、session events、批改结果、错题、复习项、备课任务和模型调用视为一等领域对象。
+    - AI 生成的教育内容必须有 admin 检查路径。
+    - 涉及公式或课程展示的设计必须包含数学渲染和 fallback 行为。
+
+  spec:
+    - 围绕可观察行为写需求，不写空泛实现愿望。
+    - 每个课堂 workflow 需求都应提到 session events 或派生状态。
+    - 每个会改变进度的需求都要定义确定性迁移规则。
+    - 每个 AI 生成内容需求都要包含校验或 quarantine 行为。
+    - 每个检索相关需求都要区分规范结构化数据和证据 chunks。
+    - 统一使用考试、学科、章节、知识点、题目、课包、session、错题和复习术语。
+
+  tasks:
+    - 将工作拆成小而可 review 的任务，单个任务应能在几小时内完成。
+    - Phase 0A 任务先定义 legacy import schemas、source refs、dry-run 报告和 quarantine。
+    - 先做 schemas/types，再做消费它们的 UI flow。
+    - 先做确定性状态迁移，再做 AI 自动化。
+    - 为 schema 校验和学习状态迁移包含聚焦测试。
+    - 除非当前变更明确要求，不添加 auth、billing、真实 LLM 调用、RAG、Redis、Temporal 或生产部署。
+    - 任务列表末尾要有映射到当前阶段的验收检查。
+
+  implementation:
+    - 先阅读 PRODUCT.md。
+    - 不要构建通用聊天机器人。
+    - 不要只用 Markdown 存储商业学习者状态。
+    - 不要反写 `ai-teacher` 或假设双向同步存在。
+    - 导入 `ai-teacher` 数据时保留 raw block 和 content hash，无法解析内容进入 quarantine。
+    - 文件变更要限制在已接受的 OpenSpec change 范围内。
+    - monorepo 存在后优先遵循项目已有约定。
+    - 修改 schemas、状态迁移、课包渲染、批改或模型调用日志时，添加或更新测试。
+    - 引入真实 LLM 集成时记录 model calls 和预估成本。
+    - 保留 AI 生成课包内容的 admin 校验或 quarantine 路径。
