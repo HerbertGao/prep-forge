@@ -1,0 +1,32 @@
+{
+  "name": "@prep-forge/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo '[web] no lint configured yet (Phase 0 relies on typecheck)'",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prep-forge/db": "workspace:*",
+    "@prep-forge/lesson-runtime": "workspace:*",
+    "@prep-forge/schemas": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "katex": "^0.16.11",
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
+    "@types/katex": "^0.16.7",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.3.1",
+    "vitest": "^4.0.18"
+  }
+}

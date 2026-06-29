@@ -1,0 +1,19 @@
+node_modules/
+.pnpm-store/
+
+# build / framework output
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# env & local
+.env
+.env.*
+!.env.example
+
+# editor / os
+.DS_Store
+*.log
+coverage/

@@ -15,7 +15,7 @@ prep-forge 是一个 Web 优先、面向考试的 AI 学习系统初始化仓库
 
 ## 当前状态
 
-当前仓库包含产品方向、架构基线、分期路线图和 OpenSpec 配置，已经可以进入规格驱动实现阶段，但还没有 scaffold 可运行应用。
+当前仓库已落地 Phase 0A / Phase 0 的最小闭环：pnpm workspace（`apps/web` + `packages/schemas|db|lesson-runtime` + `packages/legacy-import`）、共享 Zod schema、Drizzle/PostgreSQL 数据模型与 migration、只读 `ai-teacher` legacy import 管线（来源追踪 / staging / quarantine / 导入报告 / 自然键幂等）、真实 seed 驱动的 dashboard / 学科页 / 题库摘要 / 课包查看器 / MathBlock fallback / 课堂骨架与 local session events、以及 admin 导入报告页。本地开发与验收说明见下文「本地开发（Phase 0）」。
 
 最新架构结论：在 Web 骨架前先做 Phase 0A，即 `ai-teacher` legacy import 的数据盘点、只读导入、来源追踪、staging/quarantine 和导入报告。RAG 后置到 Phase 3，不承担首版数据初始化。
 
@@ -93,6 +93,107 @@ Phase 0A / Phase 0 要先建立朴素、类型明确、可观测的基础：
 - 记录 local/demo session events。
 
 Phase 0A / Phase 0 不做 auth、Stripe、生产计费、真实 LLM 调用、RAG、Redis、Temporal、双向同步 `ai-teacher` 或复杂服务编排。
+
+## 本地开发（Phase 0）
+
+monorepo 使用 pnpm workspace。当前结构：
+
+```text
+apps/web/                 # Next.js App Router + TypeScript + Tailwind
+packages/schemas/         # @prep-forge/schemas — Zod schema 事实来源（Group B 填充）
+packages/db/              # @prep-forge/db — Drizzle + PostgreSQL（Group C 填充）
+packages/lesson-runtime/  # @prep-forge/lesson-runtime — 课堂状态机（后续填充）
+```
+
+> Phase 0 暂不单独拆 `packages/config` / `packages/ui`，由根配置和 `apps/web` 内联承载。
+
+### 前置
+
+- Node >= 22。
+- pnpm 10.28.2（推荐 `corepack enable` 后由 `packageManager` 字段自动锁定版本）。
+- Docker（用于本地 PostgreSQL）。
+
+### 1. 安装依赖
+
+```bash
+pnpm install
+```
+
+会解析并安装所有 workspace 包（`apps/*`、`packages/*`）。
+
+### 2. 配置数据库
+
+PostgreSQL 是 Phase 0 的规范事实来源。本地用 Docker 启动一个 Postgres（`infra/docker-compose.yml`，Postgres 16），并配置连接串：
+
+```bash
+docker compose -f infra/docker-compose.yml up -d   # 启动本地 Postgres
+cp .env.example .env                                # DATABASE_URL 已匹配上面的服务
+# 若本机 5432 已被占用，改 compose 的 host 端口（如 55432:5432）并同步 .env 的 DATABASE_URL
+
+# 可选：使用 Neon/Supabase/任意 Postgres 时，改 .env 里的 DATABASE_URL 即可
+export $(grep -v '^#' .env | xargs)                 # 让 shell 读到 DATABASE_URL
+
+pnpm db:generate   # 由 packages/db 的 Drizzle schema 生成 migration SQL（离线，无需 DB）
+pnpm db:migrate    # 把 migration 应用到 DATABASE_URL 指向的 Postgres
+```
+
+`packages/db`（`@prep-forge/db`）的 Drizzle 表与 `@prep-forge/schemas`（Zod，唯一事实来源）保持一致，由 parity 测试 `pnpm --filter @prep-forge/db test` 防漂移。
+
+最小 migration 验证（确认 Phase 0 表已建好）：
+
+```bash
+docker compose -f infra/docker-compose.yml exec postgres \
+  psql -U prepforge -d prepforge -c "\dt"   # 应列出 import_runs、courses、session_events 等 24 张表
+```
+
+导入结果先写入 staging（`imported_entities`），生成报告后用 `pnpm db:seed` 显式发布为 demo seed；`import_errors` / quarantine 行不发布。
+
+### 3. 运行 legacy import 并发布 seed
+
+首版 seed 数据来自 `HerbertGao/ai-teacher` 只读快照（本地 clone 或 fixture）。导入器只读源、保留来源追踪，先 dry-run 看报告，再正式导入并发布到 PostgreSQL：
+
+```bash
+# dry-run：只扫描/解析/产报告，不写库（报告 JSON 到 stdout，日志到 stderr）
+pnpm import:legacy -- --source <ai-teacher 路径> --dry-run
+
+# 正式导入：写 staging(imported_entities) 并发布到领域表（需先 db:migrate）
+pnpm import:legacy -- --source <ai-teacher 路径>
+# 等价：tsx scripts/import_legacy_ai_teacher.ts --source <path> [--dry-run]
+
+# 如只 stage 未发布，可单独显式发布已确认的 staging：
+pnpm db:seed
+```
+
+报告含 scanned / parsed / created / updated / skipped / quarantined / warnings；无法解析或悬挂的块进 `import_errors` / quarantine，不静默丢弃，也不发布。导入按稳定自然键幂等：同一快照重复导入不会重复创建实体，内容变化判为 update。
+
+### 4. 启动 Web
+
+```bash
+pnpm dev   # 默认 http://localhost:3000，首屏为学习工作台（无需登录）
+```
+
+### 5. 运行检查
+
+```bash
+pnpm typecheck   # 覆盖全部 workspace 包
+pnpm lint
+pnpm test
+pnpm build       # 构建 apps/web
+```
+
+> 说明：`db:*`、`import:legacy` 与各包 `test` / `typecheck` / `build` 均已可真实运行。`lint` 暂为占位命令（Phase 0 以 strict `typecheck` + 测试 + `build` 作为门禁）。
+
+### 6. 验收检查（Phase 0A / Phase 0）
+
+```bash
+pnpm -r test        # schemas + db parity + legacy-import(含 DB 幂等) + MathBlock 聚焦测试
+pnpm -r typecheck   # 全 workspace
+pnpm build          # apps/web 生产构建（无 DB 时靠 fixture 回退）
+
+# 真实数据端到端：起 Postgres → pnpm db:migrate → pnpm import:legacy -- --source <path> → 打开 / 看 dashboard
+```
+
+通过标准：开发者可本地运行；demo learner 在 dashboard / 学科页 / 题库摘要 / 课包查看器看到来自 `ai-teacher` 的真实数据（可追溯到 import run / source block，如四科 00023/02324/13180/13015 含真实状态在考/重考、马原/习概/史纲已通过）；MathBlock 渲染或优雅 fallback 且移动端不溢出；课堂骨架记录 local/demo session events 且不更新正式掌握度；导入幂等、异常块保留可检查；admin 导入报告区分人工导入/系统生成/AI 生成；无 auth/计费/真实 LLM/RAG/Redis/Temporal/webhook/`ai-teacher` 反写。
 
 ## OpenSpec 工作流
 
