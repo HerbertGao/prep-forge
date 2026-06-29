@@ -16,7 +16,7 @@
     "@prep-forge/lesson-runtime": "workspace:*",
     "@prep-forge/schemas": "workspace:*",
     "drizzle-orm": "^0.45.2",
-    "katex": "^0.16.11",
+    "katex": "^0.17.0",
     "next": "^16.2.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
