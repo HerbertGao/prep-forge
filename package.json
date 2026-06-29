@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@prep-forge/legacy-import": "workspace:*",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.0.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },
