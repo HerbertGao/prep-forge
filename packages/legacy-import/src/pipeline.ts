@@ -327,10 +327,6 @@ export async function runImport(options: ImportOptions): Promise<ImportOutcome> 
   const db = options.dryRun ? tryCreateDb(options.databaseUrl) : createDb(options.databaseUrl);
   const counts = await diffCounts(db, parsed.candidates);
 
-  if (!options.dryRun && db) {
-    await persist(db, runId, parsed, options.source);
-  }
-
   const warnings = parsed.issues.filter((i) => i.severity === "warning");
   const needsReview = parsed.issues.filter((i) => i.severity === "quarantine" || i.severity === "error");
 
@@ -352,11 +348,23 @@ export async function runImport(options: ImportOptions): Promise<ImportOutcome> 
     warnings: [...warnings.map((w) => `[${w.kind}] ${w.message}`), ...needsReview.slice(0, 50).map((e) => `[${e.severity}:${e.kind}] ${e.message}`)].slice(0, 200),
   };
 
-  // Canonical write happens only after the report object exists (auto-publish is
-  // permitted for Phase 0). The report describes the parse; publish applies it.
+  // Canonical write (auto-publish is permitted for Phase 0; the report describes
+  // the parse, publish applies it). If persist/publish throws, mark the run
+  // "failed" instead of leaving it stuck in "running" — a stuck row would
+  // pollute the admin report and the next diffCounts() baseline.
   if (!options.dryRun && db) {
-    await publishStaged(db, runId);
-    await db.update(schema.importRuns).set({ status: "completed", finishedAt: new Date() }).where(eqRun(runId));
+    try {
+      await persist(db, runId, parsed, options.source);
+      await publishStaged(db, runId);
+      await db.update(schema.importRuns).set({ status: "completed", finishedAt: new Date() }).where(eqRun(runId));
+    } catch (err) {
+      await db
+        .update(schema.importRuns)
+        .set({ status: "failed", finishedAt: new Date() })
+        .where(eqRun(runId))
+        .catch(() => {});
+      throw err;
+    }
   }
 
   return { runId, report, parsed, persisted: !options.dryRun && Boolean(db) };

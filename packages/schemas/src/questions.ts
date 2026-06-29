@@ -11,6 +11,9 @@ export const Question = z.object({
   ...baseEntityFields,
   courseCode: z.string().min(1),
   src: z.string().min(1),
+  // All real snapshot questions carry a source questionId, so it stays required.
+  // ponytail: making it optional + accepting the stemHash/chapterNo/sequence
+  // fallback key is a future extension (needs the Drizzle column + migration too).
   questionId: z.string().min(1),
   // fallback 自然键字段
   stemHash: z.string().nullable().optional(),

@@ -57,11 +57,11 @@ export function Classroom({
       payload: extra.payload,
     });
     setEvents((prev) => [...prev, { ...event, persisted: null }]);
-    void recordSessionEvent(sessionId, event).then((r) =>
-      setEvents((prev) =>
-        prev.map((e) => (e.id === event.id ? { ...e, persisted: r.persisted } : e)),
-      ),
-    );
+    const settle = (persisted: boolean): void =>
+      setEvents((prev) => prev.map((e) => (e.id === event.id ? { ...e, persisted } : e)));
+    // recordSessionEvent already returns { persisted: false } on a DB error, but
+    // guard the call itself rejecting so it never surfaces as an unhandled rejection.
+    void recordSessionEvent(sessionId, event).then((r) => settle(r.persisted), () => settle(false));
   }
 
   // Start the demo lesson once on mount: lesson_started + step_shown(step 0).
@@ -114,8 +114,11 @@ export function Classroom({
 
           {ANSWERABLE.has(step.type) && !completed && (
             <Card>
-              <label className="mb-1 block text-xs font-medium text-gray-600">你的回答</label>
+              <label htmlFor="answer" className="mb-1 block text-xs font-medium text-gray-600">
+                你的回答
+              </label>
               <textarea
+                id="answer"
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 className="w-full rounded-md border border-gray-200 p-2 text-sm"

@@ -166,7 +166,7 @@ export async function stageEntities(
  */
 export async function publishStaged(db: Database, importRunId: string): Promise<PublishResult> {
   const blockedRows = await db
-    .select({ sourceBlockId: importErrors.sourceBlockId })
+    .select({ sourceBlockId: importErrors.sourceBlockId, severity: importErrors.severity })
     .from(importErrors)
     .where(
       and(
@@ -174,9 +174,14 @@ export async function publishStaged(db: Database, importRunId: string): Promise<
         inArray(importErrors.severity, ["quarantine", "error"]),
       ),
     );
-  const blockedBlocks = new Set(
-    blockedRows.map((r) => r.sourceBlockId).filter((v): v is string => Boolean(v)),
-  );
+  // source_block_id -> blocked status (error wins over quarantine).
+  const blockedBlocks = new Map<string, "quarantine" | "error">();
+  for (const row of blockedRows) {
+    if (!row.sourceBlockId) continue;
+    const next = row.severity === "error" ? "error" : "quarantine";
+    const prev = blockedBlocks.get(row.sourceBlockId);
+    blockedBlocks.set(row.sourceBlockId, prev === "error" ? prev : next);
+  }
 
   const staged = await db
     .select()
@@ -189,7 +194,14 @@ export async function publishStaged(db: Database, importRunId: string): Promise<
   let blocked = 0;
 
   for (const entity of staged) {
-    if (blockedBlocks.has(entity.sourceBlockId)) {
+    const blockedStatus = blockedBlocks.get(entity.sourceBlockId);
+    if (blockedStatus) {
+      // Move it out of "staged" so the ledger distinguishes quarantined rows from
+      // genuinely unpublished ones and reruns don't reprocess it as a candidate.
+      await db
+        .update(importedEntities)
+        .set({ status: blockedStatus })
+        .where(eq(importedEntities.id, entity.id));
       blocked += 1;
       continue;
     }

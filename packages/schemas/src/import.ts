@@ -5,10 +5,15 @@ import { baseEntityFields } from "./common";
 // 来源块稳定身份 = sourcePath + headingPath + normalizedKey；content_hash 仅作变化检测。
 
 /** 行号范围。 */
-export const LineRange = z.object({
-  start: z.number().int().nonnegative(),
-  end: z.number().int().nonnegative(),
-});
+export const LineRange = z
+  .object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
+  })
+  .refine((range) => range.end >= range.start, {
+    message: "lineRange.end must be >= lineRange.start",
+    path: ["end"],
+  });
 export type LineRange = z.infer<typeof LineRange>;
 
 /** 一次导入批次（import_runs）。 */
@@ -76,7 +81,7 @@ export const ImportError = z.object({
   sourceDocumentId: z.string().nullable().optional(),
   sourceBlockId: z.string().nullable().optional(),
   sourcePath: z.string().nullable().optional(),
-  headingPath: z.array(z.string()).optional(),
+  headingPath: z.array(z.string()).nullable().optional(),
   rawBlock: z.string().nullable().optional(),
   severity: z.enum(["error", "warning", "quarantine"]),
   kind: z.string().min(1),

@@ -202,11 +202,19 @@ export function parseSubject(
   const courseCode = matched?.code ?? `PROV-${slug}`;
   const name = alias?.name ?? slug;
 
-  // pick a provenance block source: first available file's preamble, else synthetic.
+  // Provenance block: a REAL block over the first available subject file (real
+  // lineRange + rawBlock) so the subject/provisional-course sourceBlockId traces
+  // back to imported text, mirroring the other subject parsers. The block id is
+  // unchanged (relPath|[]|"subject"), so idempotency holds. Only a subject dir
+  // with no readable file falls back to a synthetic placeholder.
   const firstDoc = SUBJECT_FILE_BASES.map((b) => files[b]).find((d): d is ScannedDoc => Boolean(d));
-  const subjectBlock = firstDoc
-    ? makeBlock(firstDoc.relPath, [], "subject", { start: 0, end: 0 }, `subject:${slug}`)
-    : makeBlock(`teacher/subjects/${slug}`, [], "subject", { start: 0, end: 0 }, `subject:${slug}`);
+  let subjectBlock: BlockDraft;
+  if (firstDoc) {
+    const raw = readFileSync(firstDoc.absPath, "utf8");
+    subjectBlock = makeBlock(firstDoc.relPath, [], "subject", { start: 0, end: Math.max(0, splitLines(raw).length - 1) }, raw);
+  } else {
+    subjectBlock = makeBlock(`teacher/subjects/${slug}`, [], "subject", { start: 0, end: 0 }, `subject:${slug}`);
+  }
   result.blocks.push(subjectBlock);
 
   // Subject entity (public curriculum view).

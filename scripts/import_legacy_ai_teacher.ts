@@ -18,13 +18,20 @@ interface Args {
 
 function parseArgs(argv: string[]): Args {
   const args: Args = { dryRun: false };
+  const requireValue = (flag: string, value: string | undefined): string => {
+    if (!value || value.startsWith("-")) {
+      process.stderr.write(`[import] ${flag} requires a value\n`);
+      process.exit(2);
+    }
+    return value;
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--") continue; // pnpm forwards a literal `--` separator
-    else if (a === "--source") args.source = argv[++i];
+    else if (a === "--source") args.source = requireValue("--source", argv[++i]);
     else if (a === "--dry-run") args.dryRun = true;
-    else if (a === "--report") args.report = argv[++i];
-    else if (a === "--database-url") args.databaseUrl = argv[++i];
+    else if (a === "--report") args.report = requireValue("--report", argv[++i]);
+    else if (a === "--database-url") args.databaseUrl = requireValue("--database-url", argv[++i]);
     else if (a === "--help" || a === "-h") {
       process.stderr.write("usage: import_legacy_ai_teacher --source <path> [--dry-run] [--report <file>]\n");
       process.exit(0);

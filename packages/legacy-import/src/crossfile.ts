@@ -39,7 +39,7 @@ export function crossFileWarnings(args: {
   for (const stat of args.subjectStats) {
     const dash = args.dashboard?.totals.get(stat.slug);
     const totals = [
-      ["syllabus", stat.syllabusKpCount || null],
+      ["syllabus", stat.syllabusKpCount ?? null],
       ["progress", stat.progressTotal],
       ["dashboard", dash?.total ?? null],
     ].filter(([, v]) => v != null) as [string, number][];

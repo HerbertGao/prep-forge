@@ -78,7 +78,9 @@ export const SessionEvent = z.object({
   sequence: z.number().int().nonnegative(),
   actorType: ActorType,
   idempotencyKey: z.string().min(1),
-  occurredAt: z.string().min(1),
+  // Producers pass new Date().toISOString(); reject malformed timestamps at the
+  // envelope boundary instead of at the DB/replay layer.
+  occurredAt: z.iso.datetime(),
   tenantId: z.string().nullable().optional(),
   lessonPacketId: z.string().nullable().optional(),
   stepId: z.string().nullable().optional(),

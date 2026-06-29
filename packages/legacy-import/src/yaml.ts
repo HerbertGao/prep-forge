@@ -102,19 +102,27 @@ function assign(item: Item, key: string, rawValue: string, indent: number, start
 }
 
 export function parseCompactYamlQuestions(content: string, chapterNo: string | null): RawQuestion[] {
-  return parseCompactYaml(content).map((it) => {
+  const labels = ["A", "B", "C", "D", "E", "F"];
+  const out: RawQuestion[] = [];
+  for (const it of parseCompactYaml(content)) {
+    const stem = typeof it.q === "string" ? it.q.trim() : "";
+    const answer = typeof it.ans === "string" ? it.ans.trim() : "";
+    // Skip malformed items rather than coercing them into empty questions —
+    // the questionBank caller persists every returned row, so a row missing the
+    // required stem/answer would otherwise import as a real but empty question.
+    if (!stem || !answer) continue;
     const opts = Array.isArray(it.opts) ? it.opts : [];
-    const labels = ["A", "B", "C", "D", "E", "F"];
-    return {
+    out.push({
       id: typeof it.id === "string" ? it.id : null,
       src: typeof it.src === "string" ? it.src : null,
       type: typeof it.type === "string" ? it.type : null,
       kp: typeof it.kp === "string" ? it.kp : null,
-      stem: typeof it.q === "string" ? it.q : "",
+      stem,
       options: opts.map((content, i) => ({ label: labels[i] ?? String(i), content })),
-      answer: typeof it.ans === "string" ? it.ans : "",
+      answer,
       solution: typeof it.sol === "string" ? it.sol : null,
       chapterNo,
-    } satisfies RawQuestion;
-  });
+    });
+  }
+  return out;
 }
