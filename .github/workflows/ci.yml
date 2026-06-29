@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+
+    # Real PostgreSQL so the legacy-import idempotency suite (skipped offline)
+    # actually runs in CI instead of being silently gated out.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prepforge
+          POSTGRES_PASSWORD: prepforge
+          POSTGRES_DB: prepforge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prepforge -d prepforge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://prepforge:prepforge@localhost:5432/prepforge
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Lint
+        run: pnpm -r lint
+
+      - name: Apply database migrations
+        run: pnpm db:migrate
+
+      - name: Test (incl. PostgreSQL-backed idempotency suite)
+        run: pnpm -r test
+
+      - name: Build web
+        run: pnpm --filter @prep-forge/web build
