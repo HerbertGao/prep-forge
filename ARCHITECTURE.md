@@ -164,7 +164,7 @@ source snapshot
 
 幂等规则：
 
-- `source_path + heading_path + normalized_key + content_hash` 用于稳定识别来源块。
+- `source_path + heading_path + normalized_key` 用于稳定识别来源块（身份键，不含 content_hash）；content_hash 仅用于检测该块是否变化。
 - 题目优先用 `course + src + id` 作为自然键；缺失时使用题干 hash。
 - 知识点优先用 `course_code + kp_code`。
 - 导入默认 dry-run 生成报告，确认后再 publish。

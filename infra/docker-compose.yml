@@ -1,0 +1,24 @@
+# Local Postgres for Phase 0 (设计决策 3). Bring up, then run migrations:
+#   docker compose -f infra/docker-compose.yml up -d
+#   cp .env.example .env   # DATABASE_URL matches the service below
+#   pnpm db:migrate
+services:
+  postgres:
+    image: postgres:16
+    container_name: prepforge-postgres
+    environment:
+      POSTGRES_USER: prepforge
+      POSTGRES_PASSWORD: prepforge
+      POSTGRES_DB: prepforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - prepforge_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prepforge -d prepforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  prepforge_pgdata:
