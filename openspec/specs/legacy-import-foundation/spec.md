@@ -61,8 +61,9 @@
 - **那么** 系统必须为快照中每个学科生成稳定课程记录，并取真实状态（未开始/缺考/重考/在考/已通过）：在考状态来自 `exam_plan.md`；已通过历史课程的 `已通过` 状态可来自 `exam_plan.md`、`learner_profile.md` 或已通过课程清单（任一记录即可），不得因 `exam_plan.md` 未列出而误标为 unmapped；不得跳过、报错或留 undefined 状态
 
 #### 场景:学科目录在 exam_plan 中无对应代码
-- **当** 某 `teacher/subjects/<slug>/` 的 slug 在 `exam_plan.md` 考试代码表中没有对应行（陈旧/模板/废弃学科）
+- **当** 某 `teacher/subjects/<slug>/` 的 slug **既不在** `exam_plan.md` 考试代码表中，**也不属于**已通过课程清单/`learner_profile.md`（陈旧/模板/废弃学科）
 - **那么** 系统必须用 slug 生成 provisional course_code、把状态标为 unmapped/未知，并记录 import error/warning，而不是留空 course_code 或 undefined 状态
+- **注（状态来源优先级）**：已通过（exam_plan/learner_profile/已通过清单任一）> exam_plan 在考状态（未开始/缺考/重考/在考）> unmapped/未知；同一学科不会同时判为已通过和 unmapped
 
 ### 需求:公共内容与个人状态分离
 系统必须为每一条导入记录显式标记为公共内容库或个人学习状态，不允许任何已导入记录处于未分类状态；分类按实体而非整文件（混合来源文件如 `exam_plan.md` 同时派生公共的课程/考试轨道实体和个人的考试计划实体）。

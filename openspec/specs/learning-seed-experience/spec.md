@@ -20,7 +20,7 @@
 
 #### 场景:Dashboard 数据可追溯到导入
 - **当** 验证 dashboard 是否满足“非手写 mock”要求
-- **那么** dashboard 展示的考期、进度和风险数值必须读自带 `source_block_id` 的 `imported_entities`，可由数值 → imported_entity → source block → content hash 核对；fixture 不能用于 dashboard 验收路径
+- **那么** dashboard 展示的考期、进度和风险数值必须读自带 `source_block_id` 的**已发布领域记录**（对应 `imported_entities` 中 `status = published` 的行；staged/quarantine/error 不得满足验收），可由数值 → 已发布 imported_entity → source block → content hash 核对；fixture 不能用于 dashboard 验收路径
 
 #### 场景:统计冲突时的展示
 - **当** dashboard、progress 或 syllabus 对同一课程的进度数不一致，或多文件考试日期冲突
