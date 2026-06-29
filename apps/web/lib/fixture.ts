@@ -133,7 +133,7 @@ export const FIXTURE: RawSeed = {
       learnerId: "learner-1",
       courseCode: "02324",
       kpCode: "DM01-01",
-      dueDate: "2026-07-02",
+      dueDate: "2026-01-02",
       status: "due",
       ...sys,
     },
@@ -145,6 +145,16 @@ export const FIXTURE: RawSeed = {
       kpCode: "DM01-03",
       dueDate: "2026-07-05",
       status: "due",
+      ...sys,
+    },
+  ],
+  dailyLogs: [
+    {
+      id: "daily:fixture-1",
+      visibility: "personal",
+      learnerId: "learner-1",
+      date: "2026-06-28",
+      content: "复习离散数学命题逻辑，做了 10 道选择题，错 2。",
       ...sys,
     },
   ],
@@ -170,7 +180,6 @@ export const FIXTURE: RawSeed = {
     { id: "qkp:3", visibility: "public", questionId: "Q-DM01-021", courseCode: "02324", kpCode: "DM01-03", ...sys },
   ],
   questions: [],
-  questionSolutions: [],
   warnings: [
     {
       kind: "progress_drift",

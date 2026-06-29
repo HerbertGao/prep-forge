@@ -120,7 +120,24 @@ importers:
         specifier: ^4.0.18
         version: 4.1.9(@types/node@24.13.2)(vite@8.1.0(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
 
-  packages/lesson-runtime: {}
+  packages/lesson-runtime:
+    dependencies:
+      '@prep-forge/db':
+        specifier: workspace:*
+        version: link:../db
+      '@prep-forge/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.2
+      vitest:
+        specifier: ^4.0.18
+        version: 4.1.9(@types/node@24.13.2)(vite@8.1.0(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
 
   packages/schemas:
     dependencies:

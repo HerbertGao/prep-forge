@@ -8,6 +8,34 @@
       "when": 1782701459123,
       "tag": "0000_wakeful_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782727700829,
+      "tag": "0001_famous_bulldozer",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782736480382,
+      "tag": "0002_quiet_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782741196442,
+      "tag": "0003_fearless_rattler",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782746134492,
+      "tag": "0004_grey_bucky",
+      "breakpoints": true
     }
   ]
 }

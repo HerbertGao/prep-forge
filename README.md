@@ -23,7 +23,7 @@ prep-forge 是一个 Web 优先、面向考试的 AI 学习系统初始化仓库
 
 - `PRODUCT.md`：产品命题、架构、阶段规划和工程规则。
 - `ARCHITECTURE.md`：架构推荐、边界、事件模型、AI/RAG 与质量门禁。
-- `RODEMAP.md`：分期开发路线图、验收门槛和显式延期项。
+- `ROADMAP.md`：分期开发路线图、验收门槛和显式延期项。
 - `openspec/config.yaml`：面向 AI coding agent 的紧凑 OpenSpec 上下文和工件规则。
 - `CLAUDE.md`：Claude Code 入口。
 
