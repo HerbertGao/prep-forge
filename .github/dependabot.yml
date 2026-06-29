@@ -6,6 +6,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Pin @types/node to the runtime major (Node 24 LTS); block major bumps ahead of it
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor-patch:
         update-types:

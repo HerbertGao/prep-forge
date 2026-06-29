@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "packageManager": "pnpm@10.28.2",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "pnpm --filter @prep-forge/web dev",
@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@prep-forge/legacy-import": "workspace:*",
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.0.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },
