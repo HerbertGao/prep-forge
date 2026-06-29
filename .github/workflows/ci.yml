@@ -10,7 +10,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded PR runs, but never cancel a main build (every main commit gets verified).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   check:
@@ -57,7 +58,9 @@ jobs:
       - name: Typecheck
         run: pnpm -r typecheck
 
-      - name: Lint
+      # Placeholder: every package `lint` is an echo stub (no linter adopted yet),
+      # so a green check here means "the lint command ran", not "code was linted".
+      - name: Lint (placeholder — no linter configured yet)
         run: pnpm -r lint
 
       - name: Apply database migrations

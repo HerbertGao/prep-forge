@@ -13,17 +13,28 @@ import { runImport } from "../src/index";
 // Skipped (with the parse-layer test still covering natural-key stability) when
 // no DATABASE_URL is set so the suite stays green offline.
 const HAS_DB = Boolean(process.env.DATABASE_URL);
+// In CI the Postgres-backed proofs MUST run; fail loudly if the service/env was
+// dropped, so these idempotency tests can never silently skip back to green.
+if (process.env.CI && !HAS_DB) {
+  throw new Error("idempotency.db.test requires DATABASE_URL in CI (the Postgres service must be wired)");
+}
 const FIXTURE = fileURLToPath(new URL("./fixtures/snapshot", import.meta.url));
 const MIGRATIONS = fileURLToPath(new URL("../../db/drizzle", import.meta.url));
 
 async function resetSchema(): Promise<void> {
   const db = createDb();
   await db.execute(sql.raw("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"));
-  const file = readdirSync(MIGRATIONS).find((f) => f.endsWith(".sql"))!;
-  const ddl = readFileSync(join(MIGRATIONS, file), "utf8");
-  for (const stmt of ddl.split("--> statement-breakpoint")) {
-    const s = stmt.trim();
-    if (s) await db.execute(sql.raw(s));
+  // Apply ALL migrations in order (not just the first .sql) so the reset stays
+  // correct once a 0001_* migration lands.
+  const files = readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  for (const file of files) {
+    const ddl = readFileSync(join(MIGRATIONS, file), "utf8");
+    for (const stmt of ddl.split("--> statement-breakpoint")) {
+      const s = stmt.trim();
+      if (s) await db.execute(sql.raw(s));
+    }
   }
 }
 
