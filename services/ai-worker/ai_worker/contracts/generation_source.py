@@ -6,12 +6,16 @@ from __future__ import annotations
 from enum import Enum
 from typing import List
 
-from pydantic import BaseModel, ConfigDict, constr
+from pydantic import BaseModel, ConfigDict, Field, RootModel, constr
 
 
 class SourceType(Enum):
     question = 'question'
     question_solution = 'question_solution'
+
+
+class ModelCallId(RootModel[constr(min_length=1)]):
+    root: constr(min_length=1)
 
 
 class GenerationSource(BaseModel):
@@ -20,5 +24,5 @@ class GenerationSource(BaseModel):
     )
     sourceType: SourceType
     sourceId: constr(min_length=1)
-    modelCallIds: List[str]
+    modelCallIds: List[ModelCallId] = Field(..., min_length=1)
     promptVersion: constr(min_length=1)

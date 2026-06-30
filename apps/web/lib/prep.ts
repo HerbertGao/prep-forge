@@ -609,6 +609,13 @@ export async function reconcileJob(jobId: string): Promise<JobView> {
  * MANDATORY (a blanket flip would batch-publish every draft). 0 rows ⇒ rollback,
  * no confirmation. Writes admin_confirmations(lesson_packet) DIRECTLY — NOT via
  * confirmContent(), whose question/answer/kp_link branches would reject it. */
+class ConfirmDraftReadyRejected extends Error {
+  constructor() {
+    super("not a draft ai_generated packet");
+    this.name = "ConfirmDraftReadyRejected";
+  }
+}
+
 export async function confirmDraftReady(lessonPacketId: string): Promise<{ ok: boolean }> {
   try {
     const db = createDb();
@@ -626,7 +633,7 @@ export async function confirmDraftReady(lessonPacketId: string): Promise<{ ok: b
         )
         .returning({ id: schema.lessonPackets.id });
       if (updated.length === 0) {
-        throw new Error("rollback: not a draft ai_generated packet"); // → no confirmation
+        throw new ConfirmDraftReadyRejected(); // → rollback, no confirmation
       }
       await tx
         .insert(schema.adminConfirmations)
@@ -636,7 +643,9 @@ export async function confirmDraftReady(lessonPacketId: string): Promise<{ ok: b
     });
     return { ok };
   } catch (e) {
-    console.error("[prep] confirmDraftReady failed:", e);
+    if (!(e instanceof ConfirmDraftReadyRejected)) {
+      console.error("[prep] confirmDraftReady failed:", e);
+    }
     return { ok: false };
   }
 }

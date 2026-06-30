@@ -88,6 +88,7 @@ describe.skipIf(!RUN_SUITE)("G8 prep_worker hard wall (negative permissions)", (
     // ① no INSERT/UPDATE/DELETE on any non-granted table — DELETE alone trips the
     // table-level ACL (checked before any row scan), so it is a uniform probe.
     for (const t of [
+      "admin_confirmations",
       "source_blocks",
       "source_documents",
       "imported_entities",

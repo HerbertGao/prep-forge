@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, conint, constr
+from pydantic import BaseModel, ConfigDict, Field, RootModel, conint, constr
 
 
 class Origin(Enum):
@@ -105,13 +105,17 @@ class SourceType(Enum):
     question_solution = 'question_solution'
 
 
+class ModelCallId(RootModel[constr(min_length=1)]):
+    root: constr(min_length=1)
+
+
 class GenerationSource(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
     sourceType: SourceType
     sourceId: constr(min_length=1)
-    modelCallIds: List[str]
+    modelCallIds: List[ModelCallId] = Field(..., min_length=1)
     promptVersion: constr(min_length=1)
 
 
@@ -123,4 +127,4 @@ class PrepGenerateResult(BaseModel):
     tenantId: constr(min_length=1)
     jobId: constr(min_length=1)
     lessonPacket: LessonPacket
-    generationSources: List[GenerationSource]
+    generationSources: List[GenerationSource] = Field(..., min_length=1)

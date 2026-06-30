@@ -39,7 +39,7 @@ _ERROR_DETAIL_MAX = 200
 _SECRET_PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9._\-]+"),
     re.compile(r"(?i)bearer\s+[A-Za-z0-9._\-]+"),
-    re.compile(r"(?i)authorization:\s*\S+"),
+    re.compile(r"(?i)authorization:\s*[^\r\n]+"),
     re.compile(r"eyJ[A-Za-z0-9._\-]{10,}"),  # JWT / subscription token
     re.compile(r"(postgres(?:ql)?://[^\s:/@]+:)[^\s/@]+(@)"),  # DSN password
 ]

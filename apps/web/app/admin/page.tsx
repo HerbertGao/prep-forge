@@ -306,14 +306,15 @@ function PrepSection({
 }
 
 export default async function AdminImportsPage() {
-  const r = await loadImportReport();
-  const { packets: packetSummaries } = await loadAllPackets();
-  const confirmed = await loadContentConfirmations();
-  const [prepJobs, confirmedKps, aiPackets] = await Promise.all([
+  const [r, allPackets, confirmed, prepJobs, confirmedKps, aiPackets] = await Promise.all([
+    loadImportReport(),
+    loadAllPackets(),
+    loadContentConfirmations(),
     loadPrepJobs(),
     loadConfirmedKpCodes(),
     loadAiGeneratedPackets(),
   ]);
+  const { packets: packetSummaries } = allPackets;
   const packetViews = (
     await Promise.all(
       packetSummaries

@@ -106,9 +106,9 @@ class ClaudeCliAdapter:
         return env
 
     async def invoke(self, prompt: str) -> AdapterResult:
-        # Fixed argv; `--tools ""` (empty allowlist) last so the variadic option
-        # can't swallow a following flag. Prompt is NOT here — it goes via stdin.
-        argv = [self._config.cli_path, "-p", "--output-format", "json"]
+        # Fixed argv; dontAsk + `--tools ""` keep tool use non-interactive and
+        # deny-all. Prompt is NOT here — it goes via stdin.
+        argv = [self._config.cli_path, "-p", "--output-format", "json", "--permission-mode", "dontAsk"]
         if self._config.model:
             argv += ["--model", self._config.model]
         argv += ["--tools", ""]

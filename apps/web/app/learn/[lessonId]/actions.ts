@@ -216,8 +216,13 @@ async function persistAndApply(
  */
 async function packetLearnable(lessonPacketId: string | null): Promise<boolean> {
   if (!lessonPacketId) return true;
+  let db: Database;
   try {
-    const db = createDb();
+    db = createDb();
+  } catch {
+    return true;
+  }
+  try {
     const r = await db
       .select({ status: schema.lessonPackets.status })
       .from(schema.lessonPackets)
@@ -226,7 +231,7 @@ async function packetLearnable(lessonPacketId: string | null): Promise<boolean> 
     if (r.length === 0) return false;
     return r[0]!.status === "ready" || r[0]!.status === "consumed";
   } catch {
-    return true;
+    return false;
   }
 }
 

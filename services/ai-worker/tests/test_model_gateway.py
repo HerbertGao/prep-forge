@@ -124,10 +124,17 @@ def test_failure_records_error_row_and_sanitizes():
 def test_sanitize_strips_secrets_keeps_structure():
     api_key_sample = "sk-" + "AbC123"
     bearer_sample = "Bearer " + "xyz.987"
+    auth_header_sample = "Authorization: " + "Bearer " + "abc.def trailing"
     dsn_sample = "postgres://u:" + "pw" + "@h/db"
-    out = sanitize_error("cli_nonzero", 1, f"token {api_key_sample} {bearer_sample} dsn {dsn_sample}")
+    out = sanitize_error(
+        "cli_nonzero",
+        1,
+        f"token {api_key_sample} {bearer_sample} dsn {dsn_sample}\n{auth_header_sample}\nnext",
+    )
     assert api_key_sample not in out
     assert bearer_sample not in out
+    assert "abc.def" not in out
+    assert "next" in out
     assert ":pw@" not in out
     assert '"error_kind": "cli_nonzero"' in out
     assert '"status_code": 1' in out

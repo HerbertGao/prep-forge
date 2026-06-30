@@ -33,9 +33,11 @@ export async function revalidateJobAction(
   }
 }
 
-export async function confirmDraftReadyAction(lessonPacketId: string): Promise<{ ok: boolean }> {
+export async function confirmDraftReadyAction(
+  lessonPacketId: string,
+): Promise<{ ok: boolean; error?: string }> {
   const r = await confirmDraftReady(lessonPacketId);
   revalidatePath("/admin");
   revalidatePath("/");
-  return r;
+  return r.ok ? r : { ok: false, error: "确认上线失败，请刷新后重试。" };
 }

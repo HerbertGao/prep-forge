@@ -13,7 +13,7 @@ import { LessonPacket } from "./lesson";
 export const GenerationSource = z.object({
   sourceType: z.enum(["question", "question_solution"]),
   sourceId: z.string().min(1),
-  modelCallIds: z.array(z.string()),
+  modelCallIds: z.array(z.string().min(1)).min(1),
   promptVersion: z.string().min(1),
 });
 export type GenerationSource = z.infer<typeof GenerationSource>;
@@ -41,6 +41,6 @@ export const PrepGenerateResult = z.object({
   tenantId,
   jobId: z.string().min(1),
   lessonPacket: LessonPacket,
-  generationSources: z.array(GenerationSource),
+  generationSources: z.array(GenerationSource).min(1),
 });
 export type PrepGenerateResult = z.infer<typeof PrepGenerateResult>;

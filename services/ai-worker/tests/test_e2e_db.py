@@ -43,11 +43,13 @@ WORKER_DSN = os.environ.get("AI_WORKER_DATABASE_URL")
 PRIV_DSN = os.environ.get("AI_WORKER_PRIVILEGED_DATABASE_URL") or os.environ.get("DATABASE_URL")
 SECRET = "e2e-shared-secret"
 
-KP = "OS13180-e2e"
+RUN_ID = uuid.uuid4().hex[:10]
+JOB_PREFIX = f"e2e-{RUN_ID}"
+KP = f"OS13180-e2e-{RUN_ID}"
 COURSE = "13180"  # demo: non-formula OS subject (design D7)
-QID = "question#13180:e2e:Q1"
-SOL_ID = "question_solution#13180:e2e:Q1"
-LINK_ID = "question_kp_link#13180:e2e:Q1"
+QID = f"question#13180:e2e:{RUN_ID}:Q1"
+SOL_ID = f"question_solution#13180:e2e:{RUN_ID}:Q1"
+LINK_ID = f"question_kp_link#13180:e2e:{RUN_ID}:Q1"
 
 
 async def _probe() -> bool:
@@ -73,7 +75,9 @@ def _can_run() -> bool:
 
 
 _RUN = _can_run()
-if os.environ.get("CI") and WORKER_DSN and PRIV_DSN and not _RUN:
+if os.environ.get("CI") and not (WORKER_DSN and PRIV_DSN):
+    raise RuntimeError("worker e2e requires AI_WORKER_DATABASE_URL and a privileged DSN in CI")
+if os.environ.get("CI") and not _RUN:
     # CI wired both DSNs but the DB/role isn't ready → fail loudly, never green-skip.
     raise RuntimeError("worker e2e DSNs set but DB/role not ready (run migrations + 0006_prep_worker_role)")
 
@@ -130,11 +134,11 @@ async def _cleanup() -> None:
     conn = await asyncpg.connect(PRIV_DSN)
     try:
         # FK-safe order: model_calls/qgr (→ prep_jobs) → steps (→ packets) → packets → jobs → question bank.
-        await conn.execute("DELETE FROM model_calls WHERE prep_job_id LIKE 'e2e-%'")
-        await conn.execute("DELETE FROM quality_gate_results WHERE prep_job_id LIKE 'e2e-%'")
-        await conn.execute("DELETE FROM lesson_steps WHERE lesson_packet_id LIKE 'lesson_packet#prep:e2e-%'")
-        await conn.execute("DELETE FROM lesson_packets WHERE id LIKE 'lesson_packet#prep:e2e-%'")
-        await conn.execute("DELETE FROM prep_jobs WHERE id LIKE 'e2e-%'")
+        await conn.execute("DELETE FROM model_calls WHERE prep_job_id LIKE $1", f"{JOB_PREFIX}%")
+        await conn.execute("DELETE FROM quality_gate_results WHERE prep_job_id LIKE $1", f"{JOB_PREFIX}%")
+        await conn.execute("DELETE FROM lesson_steps WHERE lesson_packet_id LIKE $1", f"lesson_packet#prep:{JOB_PREFIX}%")
+        await conn.execute("DELETE FROM lesson_packets WHERE id LIKE $1", f"lesson_packet#prep:{JOB_PREFIX}%")
+        await conn.execute("DELETE FROM prep_jobs WHERE id LIKE $1", f"{JOB_PREFIX}%")
         await conn.execute("DELETE FROM question_kp_links WHERE question_id = $1", QID)
         await conn.execute("DELETE FROM question_solutions WHERE question_id = $1", QID)
         await conn.execute("DELETE FROM question_options WHERE question_id = $1", QID)
@@ -163,7 +167,7 @@ async def _create_job(conn: asyncpg.Connection, job_id: str) -> None:
 
 
 def _job_id(tag: str) -> str:
-    return f"e2e-{tag}-{uuid.uuid4().hex[:10]}"
+    return f"{JOB_PREFIX}-{tag}-{uuid.uuid4().hex[:10]}"
 
 
 def _client(database_url: str) -> TestClient:

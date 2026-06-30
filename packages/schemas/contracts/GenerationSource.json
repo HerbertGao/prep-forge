@@ -14,9 +14,11 @@
       "minLength": 1
     },
     "modelCallIds": {
+      "minItems": 1,
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     "promptVersion": {

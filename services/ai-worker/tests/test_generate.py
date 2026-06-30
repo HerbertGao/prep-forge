@@ -128,7 +128,7 @@ def test_happy_path_pins_real_questions_and_validating_draft():
     assert p.contentHash
     # generation sources are structured + audit-only
     assert [s.sourceType.value for s in res.generationSources] == ["question", "question"]
-    assert res.generationSources[0].modelCallIds == ["mc#fake1"]
+    assert [m.root for m in res.generationSources[0].modelCallIds] == ["mc#fake1"]
     # gateway called once with the derived packet id + prompt version
     assert len(gw.calls) == 1
     assert gw.calls[0]["lesson_packet_id"] == "lesson_packet#prep:job-1"

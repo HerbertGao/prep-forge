@@ -13,7 +13,7 @@
     "lint": "echo '[schemas] no lint configured yet'",
     "test": "vitest run",
     "contracts:gen": "tsx scripts/gen-contracts.ts",
-    "contracts:check": "tsx scripts/gen-contracts.ts && git diff --exit-code -- contracts"
+    "contracts:check": "tsx scripts/gen-contracts.ts && git diff --exit-code -- contracts && test -z \"$(git status --porcelain --untracked-files=all -- contracts)\""
   },
   "dependencies": {
     "zod": "^4.4.3"
