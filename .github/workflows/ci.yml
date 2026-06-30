@@ -163,5 +163,5 @@ jobs:
       - name: Contracts drift (JSON Schema → Pydantic)
         run: uv run python scripts/gen_contracts.py --check
 
-      - name: Pytest (unit; DB e2e skips without a DSN)
-        run: uv run pytest -q
+      - name: Pytest (unit; DB e2e runs in check job)
+        run: uv run pytest -q --ignore=tests/test_e2e_db.py
