@@ -150,6 +150,14 @@ describe("SessionEvent", () => {
     ).toBe(true);
   });
 
+  it("rejects lesson lifecycle events with a payload", () => {
+    const payload = { stepType: "explanation", kpCodes: ["AM02-03"] };
+    expect(SessionEvent.safeParse({ ...valid, payload }).success).toBe(false);
+    expect(
+      SessionEvent.safeParse({ ...valid, eventType: "lesson_completed", payload }).success,
+    ).toBe(false);
+  });
+
   it("accepts step_shown with a { stepType, kpCodes } payload", () => {
     const evt = {
       ...valid,

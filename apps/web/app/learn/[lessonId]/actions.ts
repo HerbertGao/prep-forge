@@ -80,17 +80,33 @@ function uniqueStrings(values: Iterable<string>): string[] {
   return [...new Set(values)];
 }
 
-async function sessionHasGradedAnswer(db: Database, sessionId: string): Promise<boolean> {
+async function sessionHasGradedAnswer(
+  db: Database,
+  sessionId: string,
+  lessonPacketId: string,
+): Promise<boolean> {
+  const stepRows = await db
+    .select({ questionIds: schema.lessonSteps.questionIds })
+    .from(schema.lessonSteps)
+    .where(eq(schema.lessonSteps.lessonPacketId, lessonPacketId));
+  const packetQuestionIds = new Set(stepRows.flatMap((r) => stringArray(r.questionIds)));
+  if (packetQuestionIds.size === 0) return false;
+
   const rows = await db
     .select({ payload: schema.sessionEvents.payload })
     .from(schema.sessionEvents)
     .where(
       and(
         eq(schema.sessionEvents.sessionId, sessionId),
+        eq(schema.sessionEvents.lessonPacketId, lessonPacketId),
         eq(schema.sessionEvents.eventType, "student_answered"),
       ),
     );
-  return rows.some((r) => !!r.payload && (r.payload as { kind?: string }).kind === "graded");
+  return rows.some((r) => {
+    if (!r.payload || (r.payload as { kind?: string }).kind !== "graded") return false;
+    const questionId = (r.payload as { gradingResult?: { questionId?: unknown } }).gradingResult?.questionId;
+    return typeof questionId === "string" && packetQuestionIds.has(questionId);
+  });
 }
 
 async function resolveStepPayload(
@@ -147,10 +163,20 @@ async function persistAndApply(
     const learnerId = await getDemoLearnerId(db);
     let deterministicUpdate = false;
     let readyPacketConsumed = false;
+    let persisted = false;
     await db.transaction(async (tx) => {
-      await tx.insert(schema.sessionEvents).values(eventValues(ev)).onConflictDoNothing();
+      const inserted = await tx
+        .insert(schema.sessionEvents)
+        .values(eventValues(ev))
+        .onConflictDoNothing()
+        .returning({ id: schema.sessionEvents.id });
+      persisted = inserted.length > 0;
       if (opts.completePacketId) {
-        const hasGraded = await sessionHasGradedAnswer(tx as unknown as Database, ev.sessionId);
+        const hasGraded = await sessionHasGradedAnswer(
+          tx as unknown as Database,
+          ev.sessionId,
+          opts.completePacketId,
+        );
         if (hasGraded) {
           const consumed = await tx
             .update(schema.lessonPackets)
@@ -169,7 +195,7 @@ async function persistAndApply(
       const applied = await applyLearnerState(tx as unknown as Database, learnerId, ev.sessionId);
       deterministicUpdate = applied.deterministicUpdate;
     });
-    return { persisted: true, deterministicUpdate, readyPacketConsumed };
+    return { persisted, deterministicUpdate, readyPacketConsumed };
   } catch (err) {
     console.error("[classroom] persist+apply failed, recorded locally only:", err);
     return { persisted: false, deterministicUpdate: false, readyPacketConsumed: false };

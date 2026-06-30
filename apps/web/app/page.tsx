@@ -213,7 +213,7 @@ export default async function DashboardPage() {
           {d.recentLogs.length > 0 ? (
             <ul className="space-y-1 text-sm">
               {d.recentLogs.map((l) => (
-                <li key={l.date} className="flex gap-2">
+                <li key={l.id} className="flex gap-2">
                   <span className="shrink-0 text-gray-400">{l.date}</span>
                   <span className="text-gray-700">{l.summary}</span>
                 </li>

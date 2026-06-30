@@ -44,18 +44,23 @@ export interface MergedReview {
   lastAppliedAt: Date | null;
 }
 
-/** Largest parseable due date string, preserving the original format. */
+/** Largest parseable due date string, preserving a legacy due marker if needed. */
 export function maxDue(dues: ReadonlyArray<string | null>): string | null {
   let best: string | null = null;
   let bestT = -Infinity;
+  let legacyDue: string | null = null;
   for (const d of dues) {
     if (!d) continue;
     const t = Date.parse(d);
-    if (Number.isNaN(t) || t <= bestT) continue;
+    if (Number.isNaN(t)) {
+      if (legacyDue === null && d.trim()) legacyDue = d;
+      continue;
+    }
+    if (t <= bestT) continue;
     bestT = t;
     best = d;
   }
-  return best;
+  return best ?? legacyDue;
 }
 
 /**

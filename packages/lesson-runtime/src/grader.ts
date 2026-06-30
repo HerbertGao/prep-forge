@@ -137,7 +137,8 @@ export async function gradeQuestion(
   const links = await db
     .select({ kpCode: schema.questionKpLinks.kpCode })
     .from(schema.questionKpLinks)
-    .where(eq(schema.questionKpLinks.questionId, questionId));
+    .where(eq(schema.questionKpLinks.questionId, questionId))
+    .orderBy(schema.questionKpLinks.kpCode);
   const kpCodes = links.map((l) => l.kpCode);
   if (!q) {
     return { kind: "ungraded", reason: `question not found: ${questionId}`, resolvedKpCodes: kpCodes };

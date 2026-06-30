@@ -46,10 +46,10 @@ export async function confirmMistake(id: string): Promise<{ ok: boolean }> {
 }
 
 // Content review confirmation (task 5.2). Records that a human checked an
-// imported question / answer / KP mapping, BY REFERENCE — it UPSERTs an
-// admin_confirmations row under the derived idempotent id and NEVER writes to
-// questions/question_solutions/question_kp_links (this file imports none of
-// those tables, so it cannot). Re-confirming refreshes confirmed_at, no dup.
+// imported question / answer / KP mapping, BY REFERENCE — it verifies the
+// referenced row exists, then UPSERTs an admin_confirmations row under the
+// derived idempotent id and NEVER writes to questions/question_solutions/
+// question_kp_links. Re-confirming refreshes confirmed_at, no dup.
 export async function confirmContent(
   entityType: "question" | "answer" | "kp_link",
   entityId: string,
@@ -57,6 +57,32 @@ export async function confirmContent(
 ): Promise<{ ok: boolean }> {
   try {
     const db = createDb();
+    const exists =
+      entityType === "question"
+        ? (
+            await db
+              .select({ id: schema.questions.id })
+              .from(schema.questions)
+              .where(eq(schema.questions.id, entityId))
+              .limit(1)
+          ).length > 0
+        : entityType === "answer"
+          ? (
+              await db
+                .select({ id: schema.questionSolutions.id })
+                .from(schema.questionSolutions)
+                .where(eq(schema.questionSolutions.id, entityId))
+                .limit(1)
+            ).length > 0
+          : (
+              await db
+                .select({ id: schema.questionKpLinks.id })
+                .from(schema.questionKpLinks)
+                .where(eq(schema.questionKpLinks.id, entityId))
+                .limit(1)
+            ).length > 0;
+    if (!exists) return { ok: false };
+
     await db
       .insert(schema.adminConfirmations)
       .values({ id: confirmId(entityType, entityId), entityType, entityId, note: note ?? null })

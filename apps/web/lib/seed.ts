@@ -227,7 +227,7 @@ export function buildDashboard(bundle: SeedBundle): DashboardData {
   const recentLogs = [...raw.dailyLogs]
     .sort((a, b) => (a.date < b.date ? 1 : -1))
     .slice(0, 5)
-    .map((l) => ({ date: l.date, summary: logSummary(l.content) }));
+    .map((l) => ({ id: l.id, date: l.date, summary: logSummary(l.content) }));
 
   return {
     source,

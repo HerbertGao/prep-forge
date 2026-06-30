@@ -128,8 +128,8 @@ export const SessionEvent = z
     payload: SessionEventPayload.optional().nullable(),
   })
   .superRefine((evt, ctx) => {
-    // Only step_shown / student_answered constrain payload shape; the lifecycle
-    // events legitimately have no payload (don't break the no-payload fixture).
+    // step_shown / student_answered require payload; lifecycle events must not
+    // carry one, while still allowing absent/null payload fixtures.
     if (evt.eventType === "step_shown") {
       if (!StepShownPayload.safeParse(evt.payload).success) {
         ctx.addIssue({
@@ -149,6 +149,12 @@ export const SessionEvent = z
           message: "student_answered payload must be a graded|ungraded variant",
         });
       }
+    } else if (evt.payload != null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["payload"],
+        message: "lesson lifecycle events must not carry payload",
+      });
     }
   });
 export type SessionEvent = z.infer<typeof SessionEvent>;

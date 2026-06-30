@@ -101,7 +101,7 @@ export type TodayMistake = {
   category: string | null;
 };
 /** Recent learning-context entry derived from daily_logs (task 4.4). */
-export type ContextLog = { date: string; summary: string };
+export type ContextLog = { id: string; date: string; summary: string };
 
 export type DashboardData = {
   source: SeedSource;
