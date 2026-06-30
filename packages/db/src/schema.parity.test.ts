@@ -49,6 +49,10 @@ const PAIRS: Pair[] = [
   },
   { name: "LessonStep", schema: S.LessonStep, table: T.lessonSteps },
   { name: "SessionEvent", schema: S.SessionEvent, table: T.sessionEvents },
+  // Phase 2 DB-row contracts (D1) — transport envelopes are NOT in PAIRS.
+  { name: "ModelCall", schema: S.ModelCall, table: T.modelCalls },
+  { name: "QualityGateResult", schema: S.QualityGateResult, table: T.qualityGateResults },
+  { name: "PrepJobRecord", schema: S.PrepJobRecord, table: T.prepJobs },
   // learner state
   { name: "LearnerKpState", schema: S.LearnerKpState, table: T.learnerKpStates },
   { name: "Mistake", schema: S.Mistake, table: T.mistakes },
@@ -84,6 +88,7 @@ const ENUM_PAIRS: EnumPair[] = [
   { name: "course_exam_status", pgValues: T.courseExamStatusEnum.enumValues, zodValues: S.CourseExamStatus.options },
   { name: "kp_state", pgValues: T.kpStateEnum.enumValues, zodValues: S.KpState.options },
   { name: "lesson_packet_status", pgValues: T.lessonPacketStatusEnum.enumValues, zodValues: S.LessonPacketStatus.options },
+  { name: "prep_job_status", pgValues: T.prepJobStatusEnum.enumValues, zodValues: S.PrepJobStatus.options },
   { name: "session_event_type", pgValues: T.sessionEventTypeEnum.enumValues, zodValues: S.SessionEventType.options },
   { name: "actor_type", pgValues: T.actorTypeEnum.enumValues, zodValues: S.ActorType.options },
   {

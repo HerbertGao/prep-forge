@@ -25,8 +25,9 @@ export type CourseExamStatus = z.infer<typeof CourseExamStatus>;
 export const KpState = z.enum(["unseen", "taught", "practiced", "mastered"]);
 export type KpState = z.infer<typeof KpState>;
 
-/** 课包生命周期（PRODUCT §6.1）。 */
+/** 课包生命周期（PRODUCT §6.1）。validating = AI worker 已写草稿、待 BFF 三道门分流（Phase 2 D1）。 */
 export const LessonPacketStatus = z.enum([
+  "validating",
   "draft",
   "ready",
   "consumed",

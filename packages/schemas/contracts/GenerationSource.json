@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "sourceType": {
+      "type": "string",
+      "enum": [
+        "question",
+        "question_solution"
+      ]
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "modelCallIds": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "promptVersion": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "sourceType",
+    "sourceId",
+    "modelCallIds",
+    "promptVersion"
+  ],
+  "additionalProperties": false
+}

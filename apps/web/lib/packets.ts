@@ -127,8 +127,15 @@ export async function loadPacket(
     const packetRow = (
       await db.select().from(schema.lessonPackets).where(eq(schema.lessonPackets.id, id)).limit(1)
     )[0];
-    // draft/quarantine packets are not learnable.
-    if (!packetRow || packetRow.status === "draft" || packetRow.status === "quarantine") {
+    // draft/quarantine/validating packets are not learnable (denylist keeps the
+    // real reachable states ready+consumed; design D12 — do NOT narrow to a
+    // single-value allowlist or `consumed` re-look regresses).
+    if (
+      !packetRow ||
+      packetRow.status === "draft" ||
+      packetRow.status === "quarantine" ||
+      packetRow.status === "validating"
+    ) {
       return id === SAMPLE_LESSON_PACKET.id ? { source: "fixture", packet: sampleView() } : null;
     }
     const stepRows = await db

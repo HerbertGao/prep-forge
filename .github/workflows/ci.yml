@@ -52,11 +52,22 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      # uv for the Python worker e2e (8.4) that runs against this job's DB + role.
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.25"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
         run: pnpm -r typecheck
+
+      # Contract drift guard (D1): Zod is SoT → regenerate contracts/*.json and fail
+      # if they differ from the committed copies (i.e. Zod changed without regen).
+      - name: Contracts drift (Zod → JSON Schema)
+        run: pnpm --filter @prep-forge/schemas contracts:check
 
       # Placeholder: every package `lint` is an echo stub (no linter adopted yet),
       # so a green check here means "the lint command ran", not "code was linted".
@@ -66,8 +77,91 @@ jobs:
       - name: Apply database migrations
         run: pnpm db:migrate
 
+      # Throwaway per-run credential for the prep_worker role. Shared by the 0006
+      # role migration, the negative-permission suite, and the worker e2e DSN so
+      # all three line up on ONE value (mirrors the .env convention).
+      - name: Configure prep_worker credential
+        run: printf '%s=%s\n' PREP_WORKER_PASSWORD "pf_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+
+      # 0006 is a PRIVILEGED manual migration (CREATE ROLE / GRANT / guard
+      # triggers) — NOT a Drizzle auto-migration. The Postgres service's prepforge
+      # user is a superuser (POSTGRES_USER), so it can create the role. Required
+      # before the negative-permission suite (G8 8.2) + the worker e2e can run.
+      - name: Create prep_worker role (manual migration 0006)
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -v prep_worker_password="$PREP_WORKER_PASSWORD" \
+            -f packages/db/migrations-manual/0006_prep_worker_role.sql
+
+      # Role-gated prep DB suites (G8 8.2 + 8.4), run ISOLATED here — BEFORE the
+      # main `pnpm -r test` whose legacy-import suite does DROP SCHEMA … CASCADE
+      # (which would destroy these 0006 grants and race the assertions). RUN_PREP_DB
+      # keeps them OUT of the racy multi-package run; they execute only here, with
+      # grants intact: prep-permissions.db (the prep_worker hard wall) + prep-e2e.db
+      # (the BFF chain: reconcile → draft → ready → classroom + quarantine paths).
+      - name: Prep DB suites (role-gated, isolated)
+        env:
+          RUN_PREP_DB: "1"
+        run: pnpm --filter @prep-forge/web exec vitest run lib/prep-permissions.db.test.ts lib/prep-e2e.db.test.ts
+
+      # Python worker e2e on the SAME migrated DB + role (8.4): the full worker
+      # stack (HTTP envelope + auth + asyncpg + the G3 triggers/grants) with the
+      # deterministic stub adapter — validates the hand-written asyncpg column
+      # lists against the real tables. Also before the schema-dropping suite, since
+      # the worker writes as prep_worker and needs the 0006 grants intact.
+      - name: Worker e2e (real DB, stub model)
+        working-directory: services/ai-worker
+        run: |
+          AI_WORKER_DATABASE_URL="postgres://prep_worker:"
+          AI_WORKER_DATABASE_URL+="${PREP_WORKER_PASSWORD}"
+          AI_WORKER_DATABASE_URL+="@localhost:5432/prepforge"
+          export AI_WORKER_DATABASE_URL
+          export AI_WORKER_PRIVILEGED_DATABASE_URL="$DATABASE_URL"
+          uv sync --frozen
+          uv run pytest tests/test_e2e_db.py -q
+
+      # The general suite LAST: its legacy-import idempotency test DROP SCHEMA …
+      # CASCADE, so it must follow every grant-dependent step above. The role-gated
+      # prep suites self-skip here (RUN_PREP_DB unset).
       - name: Test (incl. PostgreSQL-backed idempotency suite)
         run: pnpm -r test
 
       - name: Build web
         run: pnpm --filter @prep-forge/web build
+
+  # Python ai-worker lane (G8 8.1): ruff + mypy + the Python-side contract drift
+  # guard + the fake-based unit tests. No DB here — the DB-gated worker e2e runs
+  # in the `check` job (which owns the Postgres service + the prep_worker role).
+  ai-worker:
+    name: ai-worker · ruff · mypy · contracts · pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai-worker
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.25"
+
+      - name: Install (locked)
+        run: uv sync --frozen
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Mypy
+        run: uv run mypy ai_worker
+
+      # Contract drift guard (D1, Python side): regenerate the Pydantic models from
+      # the committed contracts/*.json with the LOCKED datamodel-code-generator and
+      # fail if they differ. Paired with the TS-side Zod→JSON guard in `check`.
+      - name: Contracts drift (JSON Schema → Pydantic)
+        run: uv run python scripts/gen_contracts.py --check
+
+      - name: Pytest (unit; DB e2e runs in check job)
+        run: uv run pytest -q --ignore=tests/test_e2e_db.py

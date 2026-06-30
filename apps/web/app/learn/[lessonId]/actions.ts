@@ -128,6 +128,9 @@ async function resolveStepPayload(
         and(
           eq(schema.lessonSteps.lessonPacketId, lessonPacketId),
           eq(schema.lessonSteps.id, stepId),
+          // status gate (design D12): never resolve a step_shown payload for a
+          // draft/validating/quarantine packet.
+          inArray(schema.lessonPackets.status, ["ready", "consumed"]),
         ),
       )
       .limit(1)
@@ -202,6 +205,36 @@ async function persistAndApply(
   }
 }
 
+/**
+ * Status gate (design D12): the learner may only advance their own state on a
+ * ready/consumed packet. Net-new check the non-join paths (submitAnswer /
+ * recordEvent start+complete) call before persisting. lessonPacketId=null is
+ * free practice (no packet binding) → allowed. With a reachable DB, a non-null
+ * unknown id is rejected rather than treated as free practice; no DB still
+ * preserves the offline-demo fallback. The gate binds the CLIENT-claimed packet
+ * — known residual, decoupled from question ownership.
+ */
+async function packetLearnable(lessonPacketId: string | null): Promise<boolean> {
+  if (!lessonPacketId) return true;
+  let db: Database;
+  try {
+    db = createDb();
+  } catch {
+    return true;
+  }
+  try {
+    const r = await db
+      .select({ status: schema.lessonPackets.status })
+      .from(schema.lessonPackets)
+      .where(eq(schema.lessonPackets.id, lessonPacketId))
+      .limit(1);
+    if (r.length === 0) return false;
+    return r[0]!.status === "ready" || r[0]!.status === "consumed";
+  } catch {
+    return false;
+  }
+}
+
 /** lesson_started / step_shown / lesson_completed (no server-side grading). */
 export async function recordEvent(input: {
   sessionId: string;
@@ -211,6 +244,11 @@ export async function recordEvent(input: {
   stepId?: string | null;
 }): Promise<{ persisted: boolean; wvll?: WvllResult }> {
   const { sessionId, sequence, lessonPacketId, kind } = input;
+  // status gate (D12): reject start/complete on a non-learnable packet (step is
+  // gated inside resolveStepPayload's join).
+  if ((kind === "start" || kind === "complete") && !(await packetLearnable(lessonPacketId))) {
+    return { persisted: false };
+  }
   if (kind === "start") {
     const ev = buildEnvelope({
       sessionId,
@@ -278,6 +316,11 @@ export async function submitAnswer(input: {
   graded: { kind: "graded"; correct: boolean; score: number } | { kind: "ungraded"; reason: string };
 }> {
   const { sessionId, sequence, lessonPacketId, stepId, questionId, submitted } = input;
+  // status gate (D12): the learner must not grade/advance against a
+  // draft/validating packet. Net-new check before persistAndApply.
+  if (!(await packetLearnable(lessonPacketId))) {
+    return { persisted: false, graded: { kind: "ungraded", reason: "packet not available for practice" } };
+  }
   let payload: SessionEventPayload;
   try {
     const db = createDb();

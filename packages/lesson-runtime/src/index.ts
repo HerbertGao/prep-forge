@@ -13,6 +13,7 @@ export {
   isObjectiveType,
   gradeAnswer,
   gradeQuestion,
+  analyzeAnswerKey,
 } from "./grader";
 export type { QuestionGradingInput } from "./grader";
 
