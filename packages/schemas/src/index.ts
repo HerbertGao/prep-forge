@@ -21,5 +21,6 @@ export * from "./questions";
 export * from "./learner-state";
 export * from "./lesson";
 export * from "./contracts";
+export * from "./prep";
 
 export const SCHEMAS_PACKAGE = "@prep-forge/schemas";

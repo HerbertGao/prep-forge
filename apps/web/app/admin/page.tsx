@@ -8,8 +8,18 @@ import {
   loadPacket,
   type PacketView,
 } from "../../lib/packets";
+import {
+  loadAiGeneratedPackets,
+  loadConfirmedKpCodes,
+  loadPrepJobs,
+} from "../../lib/prep";
 import { Badge, Card, OriginBadge, SourceBanner } from "../../components/ui";
 import { ContentConfirmButton } from "../../components/ConfirmButton";
+import {
+  ConfirmDraftButton,
+  GenerateDraftButton,
+  RevalidateJobButton,
+} from "../../components/PrepButtons";
 
 // Read fresh provenance per request; never connect to the DB at build time
 // (build succeeds with no DB via the fixture fallback).
@@ -193,10 +203,117 @@ function PacketCard({ packet, confirmed }: { packet: PacketView; confirmed: Map<
   );
 }
 
+const JOB_TONE: Record<string, "green" | "red" | "amber" | "blue" | "gray"> = {
+  done: "green",
+  failed: "red",
+  validating: "amber",
+  running: "amber",
+  pending: "blue",
+};
+
+/** AI 草包生成 + 校验门 + 逐包上线（group G7, design D3/D5/D11）。 */
+function PrepSection({
+  confirmedKps,
+  jobs,
+  aiPackets,
+}: {
+  confirmedKps: string[];
+  jobs: Awaited<ReturnType<typeof loadPrepJobs>>;
+  aiPackets: Awaited<ReturnType<typeof loadAiGeneratedPackets>>;
+}) {
+  return (
+    <section className="mb-8">
+      <h2 className="mb-2 text-sm font-semibold text-gray-700">AI 草包生成（Phase 2）</h2>
+      <p className="mb-2 text-xs text-gray-500">
+        选已确认知识点 → BFF 创建 prep_job → worker 生成 validating 草稿 → BFF 三道硬门 → draft/quarantine →
+        逐包确认 ready。worker 失败/孤儿可「重新校验」。
+      </p>
+
+      <Card className="mb-3">
+        <div className="mb-1 text-xs font-semibold text-gray-600">已确认知识点（{confirmedKps.length}）</div>
+        {confirmedKps.length > 0 ? (
+          <ul className="space-y-1">
+            {confirmedKps.map((kp) => (
+              <li key={kp} className="flex items-center gap-3 text-xs">
+                <Badge tone="blue">{kp}</Badge>
+                <GenerateDraftButton kpCode={kp} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-gray-400">
+            暂无已确认的 kp_link。先在上方课包列表对题目 / 答案 / 知识点映射点「确认」。
+          </p>
+        )}
+      </Card>
+
+      <Card className="mb-3">
+        <div className="mb-1 text-xs font-semibold text-gray-600">prep_jobs（{jobs.length}）</div>
+        {jobs.length > 0 ? (
+          <ul className="divide-y divide-gray-100 text-xs">
+            {jobs.map((j) => (
+              <li key={j.id} className="flex flex-wrap items-center gap-2 py-1.5">
+                <Badge tone={JOB_TONE[j.status] ?? "gray"}>{j.status}</Badge>
+                <span className="font-medium">{j.kpCode}</span>
+                <span className="text-gray-400">尝试 {j.attemptCount}</span>
+                <span className="font-mono text-gray-400">{j.id.slice(0, 18)}…</span>
+                {j.failureReason && <span className="text-red-700">{j.failureReason}</span>}
+                {(j.status === "running" || j.status === "validating") && (
+                  <RevalidateJobButton jobId={j.id} />
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-gray-400">暂无 prep job。</p>
+        )}
+      </Card>
+
+      <Card>
+        <div className="mb-1 text-xs font-semibold text-gray-600">AI 草包（{aiPackets.length}）</div>
+        {aiPackets.length > 0 ? (
+          <ul className="space-y-2">
+            {aiPackets.map((p) => (
+              <li key={p.id} className="rounded-md border border-gray-100 p-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={p.status === "ready" ? "green" : p.status === "quarantine" ? "red" : "amber"}>
+                    {p.status}
+                  </Badge>
+                  <span className="font-medium">{p.title}</span>
+                  <span className="font-mono text-gray-400">{p.id}</span>
+                  {p.kpCodes.map((k) => (
+                    <Badge key={k} tone="blue">
+                      {k}
+                    </Badge>
+                  ))}
+                  {p.status === "draft" && <ConfirmDraftButton lessonPacketId={p.id} />}
+                </div>
+                <div className="mt-1 text-gray-500">
+                  来源：
+                  {p.generationSources.length > 0
+                    ? p.generationSources.map((s) => `${s.sourceType}:${s.sourceId}`).join("、")
+                    : "—"}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-gray-400">暂无 AI 生成草包。</p>
+        )}
+      </Card>
+    </section>
+  );
+}
+
 export default async function AdminImportsPage() {
   const r = await loadImportReport();
   const { packets: packetSummaries } = await loadAllPackets();
   const confirmed = await loadContentConfirmations();
+  const [prepJobs, confirmedKps, aiPackets] = await Promise.all([
+    loadPrepJobs(),
+    loadConfirmedKpCodes(),
+    loadAiGeneratedPackets(),
+  ]);
   const packetViews = (
     await Promise.all(
       packetSummaries
@@ -250,6 +367,9 @@ export default async function AdminImportsPage() {
           {packetSummaries.length === 0 && <p className="text-sm text-gray-400">暂无课包。</p>}
         </div>
       </section>
+
+      {/* 7.5 AI 草包生成 + 三道门 + 逐包上线 */}
+      <PrepSection confirmedKps={confirmedKps} jobs={prepJobs} aiPackets={aiPackets} />
 
       {/* 6.3 数据来源区分 */}
       <section className="mb-8">

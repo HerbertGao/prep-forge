@@ -78,6 +78,31 @@ function sameSet(a: Set<string>, b: Set<string>): boolean {
 }
 
 /**
+ * Gate-facing answer-key analysis (design D5 answer axis). Reuses the SAME
+ * `correctLabelSet` the grader uses, so the BFF Reference gate binds to the
+ * learner's REAL grading key — not the worker's self-reported generationSources.
+ * `optionGraded` exposes which path the grader takes (import data always takes
+ * the option.isCorrect path) so the gate can assert the import invariant
+ * (solution.answer letters == option.isCorrect set) only where it applies.
+ */
+export function analyzeAnswerKey(q: QuestionGradingInput): {
+  /** Authoritative grading key (correctLabelSet); null ⇒ no resolvable key. */
+  key: Set<string> | null;
+  /** grader takes the option.isCorrect path (≥1 option carries isCorrect). */
+  optionGraded: boolean;
+  /** Leading letters of solutionAnswer; null when no solution / no letters. */
+  solutionLabels: Set<string> | null;
+} {
+  const solutionLabels =
+    q.solutionAnswer && q.solutionAnswer.trim() ? leadingSolutionLetters(q.solutionAnswer) : null;
+  return {
+    key: correctLabelSet(q),
+    optionGraded: q.options.some((o) => o.isCorrect !== null),
+    solutionLabels,
+  };
+}
+
+/**
  * Pure grader: payload variant only, no DB. Objective → graded; subjective /
  * unknown / no-answer-key → ungraded (never fabricates a score).
  */

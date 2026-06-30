@@ -21,6 +21,8 @@ export const QualityGateResult = z.object({
   id: z.string().nullable().optional(),
   lessonPacketId: z.string().nullable().optional(),
   schemaPassed: z.boolean(),
+  // 薄主干语义 = 「无禁止公式」（step.math == null）；KaTeX 桥上线后（Phase 2.x）才转为
+  // 「渲染成功」。净化门已删（mdx/prompt 自动转义、无 sink），故不加第 4 个净化布尔（D1/D5）。
   mathRenderPassed: z.boolean(),
   questionRefsPassed: z.boolean(),
   score: z.number().min(0).max(1).nullable().optional(),
@@ -44,5 +46,40 @@ export const ModelCall = z.object({
   status: z.string().min(1),
   errorMessage: z.string().nullable().optional(),
   createdAt: z.string().nullable().optional(),
+  // Phase 2 (D1): 关联 prep job（grading 等调用无 job → nullable FK）；cost_basis 为 text 列，
+  // 取值 metered | subscription_amortized（订阅经 Claude CLI，记 API-等价摊销成本，见 D6）。
+  prepJobId: z.string().nullable().optional(),
+  costBasis: z.string().min(1).nullable().optional(),
+  promptVersion: z.string().nullable().optional(),
+  requestHash: z.string().nullable().optional(),
 });
 export type ModelCall = z.infer<typeof ModelCall>;
+
+/** prep job 生命周期（Phase 2 D3）：全程由 BFF 写，worker 禁读/写。不含 ready。 */
+export const PrepJobStatus = z.enum([
+  "pending",
+  "running",
+  "validating",
+  "done",
+  "failed",
+]);
+export type PrepJobStatus = z.infer<typeof PrepJobStatus>;
+
+/**
+ * prep_jobs 行（DB-row 契约，Phase 2 D3）。无 transport 字段。
+ * 活跃去重靠 (kpCode, promptVersion) 部分唯一索引；attemptCount 持久化跨请求兜超时（D4）；
+ * idempotencyKey 为非唯一审计列。
+ */
+export const PrepJobRecord = z.object({
+  id: z.string().min(1),
+  status: PrepJobStatus,
+  kpCode: z.string().min(1),
+  promptVersion: z.string().min(1),
+  idempotencyKey: z.string().min(1),
+  attemptCount: z.number().int().nonnegative(),
+  failureReason: z.string().nullable().optional(),
+  lessonPacketId: z.string().nullable().optional(),
+  createdAt: z.string().nullable().optional(),
+  updatedAt: z.string().nullable().optional(),
+});
+export type PrepJobRecord = z.infer<typeof PrepJobRecord>;

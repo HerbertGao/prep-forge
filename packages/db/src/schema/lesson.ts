@@ -23,6 +23,10 @@ export const lessonPackets = pgTable("lesson_packets", {
   objectives: jsonb("objectives"),
   // LessonPacket.steps (Zod) is normalized into lesson_steps below; the parity
   // test treats it as a relational field rather than a column.
+  // Phase 2 (D9): structured AI generation sources (GenerationSource[]). Audit
+  // only — parsed against the contract at write/read time, NOT part of
+  // LessonPacket Zod parity (extra column; table ⊇ Zod still holds).
+  generationSources: jsonb("generation_sources"),
   ...provenanceColumns(),
 });
 

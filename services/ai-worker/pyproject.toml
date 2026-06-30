@@ -1,0 +1,44 @@
+# prep-forge ai-worker — 仓库首个 Python 服务（FastAPI/asyncpg）。
+# 自成 Python 包，不进 pnpm TS workspace。版本锁定见下；契约 Pydantic 由
+# datamodel-code-generator 从 ../../packages/schemas/contracts/*.json 生成（提交进仓）。
+[project]
+name = "prep-forge-ai-worker"
+version = "0.0.0"
+description = "prep-forge offline AI content-prep worker (FastAPI + asyncpg)"
+requires-python = ">=3.12,<3.14"  # asyncpg wheels：3.14 暂无，钉 3.13
+dependencies = [
+  "fastapi==0.122.0",
+  "uvicorn==0.41.0",
+  "asyncpg==0.30.0",
+  "pydantic==2.13.3",
+]
+
+[dependency-groups]
+dev = [
+  "datamodel-code-generator==0.40.0",  # 锁版本：契约漂移关卡靠它确定性输出
+  "pytest==9.0.1",
+  "httpx==0.28.1",  # FastAPI TestClient
+  "ruff==0.15.20",  # 锁版本：CI lint lane（与 .ruff_cache 版本一致）
+  "mypy==1.18.2",   # 锁版本：CI typecheck lane
+]
+
+[tool.uv]
+package = false  # 虚拟项目：只装依赖，不构建本包
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true  # asyncpg / datamodel-code-generator ship no stubs
+
+# Generated contracts (scripts/gen_contracts.py, under the git-diff drift guard) —
+# datamodel-codegen emits `constr(...)`-as-annotation which mypy rejects; not ours
+# to hand-fix, so don't type-check it.
+[[tool.mypy.overrides]]
+module = "ai_worker.contracts.*"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]  # 虚拟项目（package=false），把 ai-worker 根加进 import 路径

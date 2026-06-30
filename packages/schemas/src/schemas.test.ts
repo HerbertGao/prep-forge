@@ -222,7 +222,7 @@ describe("LessonPacket", () => {
     expect(LessonPacket.safeParse(valid).success).toBe(true);
   });
 
-  it("rejects status outside draft|ready|consumed|quarantine", () => {
+  it("rejects status outside validating|draft|ready|consumed|quarantine", () => {
     expect(LessonPacket.safeParse({ ...valid, status: "archived" }).success).toBe(false);
   });
 

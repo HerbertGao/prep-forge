@@ -124,8 +124,17 @@ export type SeedPacketsResult = {
   issues: string[];
 };
 
-const referencedQuestionIds = (packet: LessonPacket): string[] =>
+/** Every questionId a packet's steps reference. Shared by seed + verify +
+ * BFF reference gate so the three never drift on what "referenced" means. */
+export const referencedQuestionIds = (packet: PacketWithSteps): string[] =>
   packet.steps.flatMap((s) => s.questionIds ?? []);
+
+/** Minimal packet shape the reference helpers need (LessonPacket satisfies it,
+ * as does a BFF-reconstructed packet). */
+export type PacketWithSteps = {
+  id: string;
+  steps: ReadonlyArray<{ questionIds?: readonly string[] | null }>;
+};
 
 /**
  * Resolve every referenced questionId against the real questions table, then

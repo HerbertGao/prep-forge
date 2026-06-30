@@ -1,0 +1,31 @@
+# ai-worker 本地编排。连宿主上的 prepforge-postgres（OrbStack，宿主 127.0.0.1:5433）。
+#
+# 用法（在 services/ai-worker 目录）：
+#   cp .env.example .env          # 填 PREP_WORKER_PASSWORD / AI_WORKER_SHARED_SECRET / AI_WORKER_DATABASE_URL
+#   docker compose up -d --build
+#   docker compose config         # 仅校验语法（不拉起容器）
+#
+# DSN host 容器内/外差异：宿主裸跑用 localhost:5433，容器内必须用
+# host.docker.internal:5433（容器里的 localhost 是容器自身）。
+services:
+  ai-worker:
+    build: .
+    container_name: prepforge-ai-worker
+    env_file:
+      - .env
+    environment:
+      # 容器内连宿主 postgres：AI_WORKER_DATABASE_URL 里的 host 必须是 host.docker.internal。
+      AI_WORKER_DATABASE_URL: ${AI_WORKER_DATABASE_URL:?set AI_WORKER_DATABASE_URL in services/ai-worker/.env}
+      # Claude CLI 凭据（G5 adapter 用隔离 HOME）：跑真实模型调用前，取消下方 volumes
+      # 注释把宿主 ~/.claude 只读挂进容器，并取消这一行指向它。
+      # CLAUDE_CONFIG_DIR: /home/appuser/.claude
+    ports:
+      # 仅暴露宿主回环（D10）：外部网络访问不到。容器内由 Dockerfile CMD 绑 0.0.0.0:8200。
+      - "127.0.0.1:8200:8200"
+    extra_hosts:
+      # OrbStack/Docker Desktop 一般自动提供；显式声明兼容纯 Linux Docker。
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    # Claude CLI 凭据挂载（运行真实模型调用时取消注释，配合上面的 CLAUDE_CONFIG_DIR）：
+    # volumes:
+    #   - ~/.claude:/home/appuser/.claude:ro

@@ -11,7 +11,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "echo '[schemas] no lint configured yet'",
-    "test": "vitest run"
+    "test": "vitest run",
+    "contracts:gen": "tsx scripts/gen-contracts.ts",
+    "contracts:check": "tsx scripts/gen-contracts.ts && git diff --exit-code -- contracts"
   },
   "dependencies": {
     "zod": "^4.4.3"

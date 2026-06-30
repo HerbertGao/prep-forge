@@ -4,10 +4,59 @@
 // 这节课包至少产出一个 graded 答案，可计入 WVLL。任一断言失败即非零退出。
 import { inArray } from "drizzle-orm";
 import { type Database, createDb } from "./client";
-import { OBJECTIVE_QUESTION_TYPES, SEED_PACKETS } from "./seed-packets";
+import {
+  OBJECTIVE_QUESTION_TYPES,
+  type PacketWithSteps,
+  referencedQuestionIds,
+  SEED_PACKETS,
+} from "./seed-packets";
 import { lessonPackets, questionKpLinks, questions } from "./schema";
 
 const OBJECTIVE = new Set<string>(OBJECTIVE_QUESTION_TYPES);
+
+/**
+ * Reference checks for ONE packet (extracted so seed verify + the Phase 2 BFF
+ * Reference gate share one definition, never a copy): every referenced
+ * questionId resolves to a real `questions` row, ≥1 is an allowlisted objective
+ * question (so completion yields a graded answer), and each objective question
+ * has ≥1 `question_kp_links` row. Returns one failure string per problem,
+ * prefixed with the packet id; empty ⇒ refs are sound. The BFF gate layers
+ * answer-key + admin_confirmations binding ON TOP of this (those are net-new,
+ * see design D5 — verify-packets only ever covered refs + kp_links presence).
+ */
+export async function checkPacketRefs(db: Database, packet: PacketWithSteps): Promise<string[]> {
+  const failures: string[] = [];
+  const refIds = referencedQuestionIds(packet);
+  const qrows = refIds.length
+    ? await db
+        .select({ id: questions.id, type: questions.type })
+        .from(questions)
+        .where(inArray(questions.id, refIds))
+    : [];
+  const typeById = new Map(qrows.map((q) => [q.id, q.type]));
+
+  const unresolved = refIds.filter((id) => !typeById.has(id));
+  if (unresolved.length > 0) {
+    failures.push(`${packet.id}: unresolved question refs ${unresolved.join(", ")}`);
+  }
+
+  const objectiveIds = refIds.filter((id) => OBJECTIVE.has(typeById.get(id) ?? ""));
+  if (objectiveIds.length < 1) {
+    failures.push(`${packet.id}: no allowlisted objective question (completion yields no graded answer)`);
+  }
+  if (objectiveIds.length > 0) {
+    const links = await db
+      .select({ questionId: questionKpLinks.questionId })
+      .from(questionKpLinks)
+      .where(inArray(questionKpLinks.questionId, objectiveIds));
+    const linkedQuestionIds = new Set(links.map((l) => l.questionId));
+    const missingLinks = objectiveIds.filter((id) => !linkedQuestionIds.has(id));
+    if (missingLinks.length > 0) {
+      failures.push(`${packet.id}: objective questions without question_kp_links ${missingLinks.join(", ")}`);
+    }
+  }
+  return failures;
+}
 
 export async function verifyPackets(db: Database): Promise<string[]> {
   const failures: string[] = [];
@@ -24,37 +73,7 @@ export async function verifyPackets(db: Database): Promise<string[]> {
     if (status !== "ready") {
       failures.push(`${packet.id}: status is ${status ?? "MISSING"}, expected ready`);
     }
-
-    const refIds = packet.steps.flatMap((s) => s.questionIds ?? []);
-    const qrows = refIds.length
-      ? await db
-          .select({ id: questions.id, type: questions.type })
-          .from(questions)
-          .where(inArray(questions.id, refIds))
-      : [];
-    const typeById = new Map(qrows.map((q) => [q.id, q.type]));
-
-    const unresolved = refIds.filter((id) => !typeById.has(id));
-    if (unresolved.length > 0) {
-      failures.push(`${packet.id}: unresolved question refs ${unresolved.join(", ")}`);
-    }
-
-    const objectiveIds = refIds.filter((id) => OBJECTIVE.has(typeById.get(id) ?? ""));
-    const objectiveCount = objectiveIds.length;
-    if (objectiveCount < 1) {
-      failures.push(`${packet.id}: no allowlisted objective question (completion yields no graded answer)`);
-    }
-    if (objectiveIds.length > 0) {
-      const links = await db
-        .select({ questionId: questionKpLinks.questionId })
-        .from(questionKpLinks)
-        .where(inArray(questionKpLinks.questionId, objectiveIds));
-      const linkedQuestionIds = new Set(links.map((l) => l.questionId));
-      const missingLinks = objectiveIds.filter((id) => !linkedQuestionIds.has(id));
-      if (missingLinks.length > 0) {
-        failures.push(`${packet.id}: objective questions without question_kp_links ${missingLinks.join(", ")}`);
-      }
-    }
+    failures.push(...(await checkPacketRefs(db, packet)));
   }
 
   return failures;

@@ -16,10 +16,20 @@ export const courseExamStatusEnum = pgEnum("course_exam_status", [
 ]);
 export const kpStateEnum = pgEnum("kp_state", ["unseen", "taught", "practiced", "mastered"]);
 export const lessonPacketStatusEnum = pgEnum("lesson_packet_status", [
+  "validating",
   "draft",
   "ready",
   "consumed",
   "quarantine",
+]);
+// Phase 2 prep job lifecycle (D3) — INDEPENDENT enum (not reused from
+// lesson_packet_status); does not include 'ready' (worker never auto-readies).
+export const prepJobStatusEnum = pgEnum("prep_job_status", [
+  "pending",
+  "running",
+  "validating",
+  "done",
+  "failed",
 ]);
 export const sessionEventTypeEnum = pgEnum("session_event_type", [
   "lesson_started",

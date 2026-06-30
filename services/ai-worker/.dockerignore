@@ -1,0 +1,13 @@
+# 缩小构建上下文；Dockerfile 只 COPY pyproject.toml/uv.lock/ai_worker，其余无须上传。
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# 绝不把本地密钥带进镜像构建上下文。
+.env
+.env.*
+!.env.example
+tests/
+scripts/
