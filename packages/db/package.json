@@ -15,7 +15,9 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "push": "drizzle-kit push",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/seed.ts",
+    "seed:packets": "tsx src/seed-packets.ts",
+    "verify:packets": "tsx src/verify-packets.ts"
   },
   "dependencies": {
     "@prep-forge/schemas": "workspace:*",

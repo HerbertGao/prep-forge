@@ -141,6 +141,69 @@ describe("SessionEvent", () => {
   it("rejects eventType outside the spec set", () => {
     expect(SessionEvent.safeParse({ ...valid, eventType: "graded" }).success).toBe(false);
   });
+
+  it("accepts lesson_started / lesson_completed with NO payload", () => {
+    // D2: lifecycle events legitimately carry no payload.
+    expect(SessionEvent.safeParse(valid).success).toBe(true);
+    expect(
+      SessionEvent.safeParse({ ...valid, eventType: "lesson_completed" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects lesson lifecycle events with a payload", () => {
+    const payload = { stepType: "explanation", kpCodes: ["AM02-03"] };
+    expect(SessionEvent.safeParse({ ...valid, payload }).success).toBe(false);
+    expect(
+      SessionEvent.safeParse({ ...valid, eventType: "lesson_completed", payload }).success,
+    ).toBe(false);
+  });
+
+  it("accepts step_shown with a { stepType, kpCodes } payload", () => {
+    const evt = {
+      ...valid,
+      eventType: "step_shown" as const,
+      payload: { stepType: "explanation", kpCodes: ["AM02-03"] },
+    };
+    expect(SessionEvent.safeParse(evt).success).toBe(true);
+  });
+
+  it("rejects step_shown whose payload is missing stepType", () => {
+    const evt = { ...valid, eventType: "step_shown" as const, payload: { kpCodes: [] } };
+    expect(SessionEvent.safeParse(evt).success).toBe(false);
+  });
+
+  it("accepts student_answered graded variant (gradingResult + modelCallId:null)", () => {
+    const evt = {
+      ...valid,
+      eventType: "student_answered" as const,
+      actorType: "student" as const,
+      payload: {
+        kind: "graded",
+        gradingResult: { questionId: "q-1", score: 1, correct: true },
+        resolvedKpCodes: ["AM02-03"],
+        modelCallId: null,
+      },
+    };
+    expect(SessionEvent.safeParse(evt).success).toBe(true);
+  });
+
+  it("accepts student_answered ungraded variant (reason, no score)", () => {
+    const evt = {
+      ...valid,
+      eventType: "student_answered" as const,
+      payload: { kind: "ungraded", reason: "subjective", resolvedKpCodes: ["AM02-03"] },
+    };
+    expect(SessionEvent.safeParse(evt).success).toBe(true);
+  });
+
+  it("rejects student_answered with a step_shown-shaped payload", () => {
+    const evt = {
+      ...valid,
+      eventType: "student_answered" as const,
+      payload: { stepType: "explanation", kpCodes: [] },
+    };
+    expect(SessionEvent.safeParse(evt).success).toBe(false);
+  });
 });
 
 describe("LessonPacket", () => {

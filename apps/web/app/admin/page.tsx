@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { loadImportReport, ORIGINS } from "../../lib/admin";
 import type { ExceptionBlock, ImportRunReport } from "../../lib/admin";
+import {
+  confirmId,
+  loadAllPackets,
+  loadContentConfirmations,
+  loadPacket,
+  type PacketView,
+} from "../../lib/packets";
 import { Badge, Card, OriginBadge, SourceBanner } from "../../components/ui";
+import { ContentConfirmButton } from "../../components/ConfirmButton";
 
 // Read fresh provenance per request; never connect to the DB at build time
 // (build succeeds with no DB via the fixture fallback).
@@ -109,8 +117,95 @@ function ExceptionRow({ e }: { e: ExceptionBlock }) {
   );
 }
 
+/** Packet list (task 5.1) + question/answer/KP verification path (task 5.2). */
+function PacketCard({ packet, confirmed }: { packet: PacketView; confirmed: Map<string, string> }) {
+  const practiceQuestions = packet.steps.flatMap((s) => s.questions);
+  return (
+    <Card>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="font-medium">{packet.title}</span>
+        <span className="text-xs text-gray-400">{packet.id}</span>
+        <Badge tone={packet.status === "ready" ? "green" : packet.status === "consumed" ? "blue" : "amber"}>
+          {packet.status}
+        </Badge>
+      </div>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+        <span>步骤 {packet.steps.length}</span>
+        <span>·</span>
+        <span>知识点：</span>
+        {packet.kpCodes.map((k) => (
+          <Badge key={k} tone="blue">
+            {k}
+          </Badge>
+        ))}
+      </div>
+      {practiceQuestions.length > 0 && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-xs text-blue-600">
+            人工确认题目 / 答案 / 知识点映射（只读，不覆盖导入来源数据）
+          </summary>
+          <ul className="mt-2 space-y-2">
+            {practiceQuestions.map((q) => (
+              <li key={q.id} className="rounded-md border border-gray-100 p-2 text-xs">
+                <div className="font-mono text-gray-400">{q.id}</div>
+                <div className="text-gray-800">{q.stem}</div>
+                <div className="mt-1 text-gray-600">
+                  <span className="font-medium">答案：</span>
+                  {q.answer ?? "—"}
+                  <span className="ml-2 font-medium">知识点：</span>
+                  {q.kpCodes.join("、") || "—"}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  {/* Each confirm targets the CONFIRMED row's OWN id (design D11):
+                      answer → the question_solutions row id; kp_link → each
+                      question_kp_links row id (one button per link, so multiple
+                      KP links no longer collapse into a single audit row). */}
+                  <ContentConfirmButton
+                    entityType="question"
+                    entityId={q.id}
+                    label="题目"
+                    confirmedAt={confirmed.get(confirmId("question", q.id)) ?? null}
+                  />
+                  {q.solutionId && (
+                    <ContentConfirmButton
+                      entityType="answer"
+                      entityId={q.solutionId}
+                      label="答案"
+                      confirmedAt={confirmed.get(confirmId("answer", q.solutionId)) ?? null}
+                    />
+                  )}
+                  {(q.kpLinks ?? []).map((link) => (
+                    <ContentConfirmButton
+                      key={link.id}
+                      entityType="kp_link"
+                      entityId={link.id}
+                      label={`知识点映射 ${link.kpCode}`}
+                      confirmedAt={confirmed.get(confirmId("kp_link", link.id)) ?? null}
+                    />
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </Card>
+  );
+}
+
 export default async function AdminImportsPage() {
   const r = await loadImportReport();
+  const { packets: packetSummaries } = await loadAllPackets();
+  const confirmed = await loadContentConfirmations();
+  const packetViews = (
+    await Promise.all(
+      packetSummaries
+        .filter((p) => p.status === "ready" || p.status === "consumed")
+        .map((p) => loadPacket(p.id)),
+    )
+  )
+    .filter((x): x is { source: "db" | "fixture"; packet: PacketView } => x !== null)
+    .map((x) => x.packet);
 
   return (
     <main className="mx-auto max-w-4xl px-5 py-8">
@@ -118,15 +213,43 @@ export default async function AdminImportsPage() {
         ← 返回工作台
       </Link>
       <header className="mb-4 mt-2">
-        <h1 className="text-2xl font-semibold tracking-tight">导入报告（Admin）</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
         <p className="mt-1 text-sm text-gray-500">
-          legacy import 批次、异常块与数据来源（Phase 0 只读视图）
+          课包检视 + 人工确认、legacy import 批次、异常块与数据来源
         </p>
       </header>
 
       <div className="mb-6">
         <SourceBanner source={r.source} />
       </div>
+
+      {/* 5.1 课包列表 + 5.2 题目/答案/知识点映射检视 */}
+      <section className="mb-8">
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">课包列表（{packetSummaries.length}）</h2>
+        <p className="mb-2 text-xs text-gray-500">
+          错题 / 复习的人工确认在「今日任务」上对 origin=system 行写 admin_confirmed_at（不触碰导入行）。
+        </p>
+        <div className="space-y-3">
+          {packetSummaries.map((p) => {
+            const view = packetViews.find((v) => v.id === p.id);
+            return view ? (
+              <PacketCard key={p.id} packet={view} confirmed={confirmed} />
+            ) : (
+              <Card key={p.id}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{p.title}</span>
+                  <span className="text-xs text-gray-400">{p.id}</span>
+                  <Badge tone="amber">{p.status}</Badge>
+                  <span className="text-xs text-gray-500">
+                    步骤 {p.stepCount} · 知识点 {p.kpCodes.join("、") || "—"}
+                  </span>
+                </div>
+              </Card>
+            );
+          })}
+          {packetSummaries.length === 0 && <p className="text-sm text-gray-400">暂无课包。</p>}
+        </div>
+      </section>
 
       {/* 6.3 数据来源区分 */}
       <section className="mb-8">

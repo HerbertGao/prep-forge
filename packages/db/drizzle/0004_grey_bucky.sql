@@ -1,0 +1,1 @@
+CREATE INDEX "question_kp_links_question_id_idx" ON "question_kp_links" USING btree ("question_id");

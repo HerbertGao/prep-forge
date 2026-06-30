@@ -11,6 +11,15 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "echo '[lesson-runtime] no lint configured yet'",
-    "test": "echo '[lesson-runtime] no tests yet'"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prep-forge/db": "workspace:*",
+    "@prep-forge/schemas": "workspace:*",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "vitest": "^4.0.18"
   }
 }

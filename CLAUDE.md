@@ -26,7 +26,7 @@
 
 - 产品事实来源：`PRODUCT.md`
 - 架构推荐：`ARCHITECTURE.md`
-- 分期路线图：`RODEMAP.md`
+- 分期路线图：`ROADMAP.md`
 - Agent-facing OpenSpec 上下文：`openspec/config.yaml`
 - 人类读者入口：`README.md`
 - Claude OpenSpec 命令：`.claude/commands/opsx/`

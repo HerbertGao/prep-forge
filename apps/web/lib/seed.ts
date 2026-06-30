@@ -8,6 +8,13 @@ import { eq } from "drizzle-orm";
 import { createDb, schema } from "@prep-forge/db";
 import type { Course } from "@prep-forge/schemas";
 import { FIXTURE } from "./fixture";
+import {
+  isMistakeActive,
+  isReviewDueToday,
+  mergeKpStateByMax,
+  mergeReviews,
+  type KpRank,
+} from "./merge";
 import type {
   ConflictWarning,
   CourseProgress,
@@ -16,6 +23,14 @@ import type {
   SeedBundle,
   SubjectData,
 } from "./types";
+
+/**
+ * 维护/抗遗忘阈值 (task 4.4/6.4): a course whose ENGAGED KPs (those with a
+ * learner_kp_state) are ≥ this fraction mastered is in maintenance mode — e.g.
+ * 13015 重考 (3/3 mastered = 1.0). Backed by the apply 调查 (design 开放问题);
+ * tune here, not scattered through the read model.
+ */
+export const MAINTENANCE_MASTERY_RATIO = 0.8;
 
 async function readAll(db: ReturnType<typeof createDb>): Promise<RawSeed> {
   const [
@@ -26,10 +41,10 @@ async function readAll(db: ReturnType<typeof createDb>): Promise<RawSeed> {
     learnerKpStates,
     mistakes,
     reviewItems,
+    dailyLogs,
     questionBankStats,
     questionKpLinks,
     questions,
-    questionSolutions,
     importErrorRows,
   ] = await Promise.all([
     db.select().from(schema.examTracks),
@@ -39,18 +54,16 @@ async function readAll(db: ReturnType<typeof createDb>): Promise<RawSeed> {
     db.select().from(schema.learnerKpStates),
     db.select().from(schema.mistakes),
     db.select().from(schema.reviewItems),
+    db.select().from(schema.dailyLogs),
     db.select().from(schema.questionBankStats),
     db.select().from(schema.questionKpLinks),
     db.select().from(schema.questions),
-    db.select().from(schema.questionSolutions),
     db
       .select({ kind: schema.importErrors.kind, message: schema.importErrors.message })
       .from(schema.importErrors)
       .where(eq(schema.importErrors.severity, "warning")),
   ]);
 
-  // ponytail: DB rows already match the Zod-derived shape (parity test in
-  // @prep-forge/db guarantees it); cast at this boundary instead of re-parsing.
   return {
     examTracks,
     courses,
@@ -59,16 +72,16 @@ async function readAll(db: ReturnType<typeof createDb>): Promise<RawSeed> {
     learnerKpStates,
     mistakes,
     reviewItems,
-    questionBankStats,
+    dailyLogs,
+    questionBankStats: questionBankStats as RawSeed["questionBankStats"],
     questionKpLinks,
     questions,
-    questionSolutions,
     warnings: importErrorRows.map((w) => ({
       kind: w.kind,
       message: w.message,
       authoritative: authoritativeFor(w.kind),
     })),
-  } as unknown as RawSeed;
+  };
 }
 
 /**
@@ -104,11 +117,26 @@ const CURRENT_STATUSES: Course["examStatus"][] = ["在考", "重考", "缺考"];
 
 function progressFor(raw: RawSeed, course: Course): CourseProgress {
   const total = raw.knowledgePoints.filter((k) => k.courseCode === course.courseCode).length;
-  const states = raw.learnerKpStates.filter((s) => s.courseCode === course.courseCode);
-  const mastered = states.filter((s) => s.state === "mastered").length;
-  const practiced = states.filter((s) => s.state === "practiced").length;
-  const taught = states.filter((s) => s.state === "taught").length;
+  // per-KP merge of imported+system rows by monotonic MAX rank (design D7) —
+  // a KP with both an imported and a system state counts once, at the higher.
+  const merged = mergeKpStateByMax(
+    raw.learnerKpStates
+      .filter((s) => s.courseCode === course.courseCode)
+      .map((s) => ({ kpCode: s.kpCode, state: s.state as KpRank })),
+  );
+  let mastered = 0;
+  let practiced = 0;
+  let taught = 0;
+  for (const st of merged.values()) {
+    if (st === "mastered") mastered += 1;
+    else if (st === "practiced") practiced += 1;
+    else if (st === "taught") taught += 1;
+  }
   const pct = total > 0 ? Math.round((mastered / total) * 100) : 0;
+  // maintenance = high mastery among ENGAGED KPs (states present), not all KPs
+  // (task 4.4): 13015 重考 has 3/3 mastered ⇒ maintenance even at low overall pct.
+  const engaged = merged.size;
+  const maintenance = engaged > 0 && mastered / engaged >= MAINTENANCE_MASTERY_RATIO;
   return {
     course,
     total,
@@ -116,6 +144,7 @@ function progressFor(raw: RawSeed, course: Course): CourseProgress {
     practiced,
     taught,
     pct,
+    maintenance,
     sourceBlockId: course.sourceBlockId ?? null,
   };
 }
@@ -150,6 +179,56 @@ export function buildDashboard(bundle: SeedBundle): DashboardData {
 
   const conflicts: ConflictWarning[] = raw.warnings;
 
+  const courseName = new Map(raw.courses.map((c) => [c.courseCode, c.name]));
+
+  // per-KP review merge (design D7): imported+system collapse per (learner,kp);
+  // the deduped count is the dashboard TOTAL, the today list is the gated subset.
+  const mergedReviews = mergeReviews(
+    raw.reviewItems.map((r) => ({
+      id: r.id,
+      learnerId: r.learnerId ?? null,
+      courseCode: r.courseCode ?? null,
+      kpCode: r.kpCode,
+      origin: r.origin,
+      dueDate: r.dueDate ?? null,
+      adminConfirmedAt: r.adminConfirmedAt ?? null,
+      lastAppliedAt: r.lastAppliedAt ?? null,
+    })),
+  );
+  const todayReviews = mergedReviews
+    .filter((r) => isReviewDueToday(r))
+    .map((r) => ({
+      id: r.id,
+      origin: r.origin,
+      courseCode: r.courseCode,
+      courseName: r.courseCode ? (courseName.get(r.courseCode) ?? null) : null,
+      kpCode: r.kpCode,
+      dueDate: r.dueDate,
+    }));
+
+  // per-event mistakes are NOT KP-collapsed (design D7): each row is its own
+  // mistake; active = admin_confirmed_at IS NULL.
+  const activeMistakes = raw.mistakes
+    .filter((m) => isMistakeActive(m))
+    .map((m) => ({
+      id: m.id,
+      origin: m.origin,
+      courseCode: m.courseCode ?? null,
+      courseName: m.courseCode ? (courseName.get(m.courseCode) ?? null) : null,
+      kpCode: m.kpCode ?? null,
+      questionRef: m.questionRef ?? null,
+      category: m.category ?? null,
+    }));
+
+  const maintenanceCourses = current
+    .filter((p) => p.maintenance)
+    .map((p) => ({ courseCode: p.course.courseCode, name: p.course.name }));
+
+  const recentLogs = [...raw.dailyLogs]
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, 5)
+    .map((l) => ({ id: l.id, date: l.date, summary: logSummary(l.content) }));
+
   return {
     source,
     examTrack,
@@ -158,11 +237,27 @@ export function buildDashboard(bundle: SeedBundle): DashboardData {
     current,
     passed,
     other,
-    reviewDue: raw.reviewItems.length,
+    // deduped totals (design D7): merged per-KP reviews; per-event mistake union
+    // (mistake ids are unique PKs, so length is already the deduped union).
+    reviewDue: mergedReviews.length,
     mistakeCount: raw.mistakes.length,
+    todayReviews,
+    activeMistakes,
+    maintenanceCourses,
+    recentLogs,
     weakPoints,
     conflicts,
   };
+}
+
+/** First non-heading line of a daily-log markdown block, trimmed for context. */
+function logSummary(content: string): string {
+  const line =
+    content
+      .split("\n")
+      .map((l) => l.replace(/^[#>\s*-]+/, "").trim())
+      .find((l) => l.length > 0) ?? "";
+  return line.length > 80 ? `${line.slice(0, 80)}…` : line || "（无摘要）";
 }
 
 export function buildSubject(bundle: SeedBundle, param: string): SubjectData | null {
@@ -175,8 +270,12 @@ export function buildSubject(bundle: SeedBundle, param: string): SubjectData | n
   if (!course) return null;
   const code = course.courseCode;
 
-  const stateByKp = new Map(
-    raw.learnerKpStates.filter((s) => s.courseCode === code).map((s) => [s.kpCode, s.state]),
+  // per-KP merge by monotonic MAX rank (design D7), not last-wins: a KP with
+  // both an imported and a system row shows the higher mastery, never double.
+  const stateByKp = mergeKpStateByMax(
+    raw.learnerKpStates
+      .filter((s) => s.courseCode === code)
+      .map((s) => ({ kpCode: s.kpCode, state: s.state as KpRank })),
   );
   const kps = raw.knowledgePoints
     .filter((k) => k.courseCode === code)

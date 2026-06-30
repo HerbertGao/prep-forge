@@ -69,3 +69,15 @@ export const QuestionKpLink = z.object({
   ...provenanceFields,
 });
 export type QuestionKpLink = z.infer<typeof QuestionKpLink>;
+
+/**
+ * 客观题型允许清单（design "Apply 调查记录" task 1.1）：单选 3 个 Unicode 变体 + 多选；
+ * 真实快照无判断题。共享单一事实来源——grader（判分）与 seed-packets（"≥1 客观题"校验）
+ * 都从这里取，避免 db ↔ lesson-runtime 循环依赖。
+ */
+export const OBJECTIVE_QUESTION_TYPES: ReadonlySet<string> = new Set([
+  "单选题", // U+5355 U+9009 U+9898
+  "単選題", // 日文/繁体字 variant
+  "单选題", // mixed variant
+  "多选题",
+]);
